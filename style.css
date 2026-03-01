@@ -1,0 +1,127 @@
+
+*, *::before, *::after { 
+    box-sizing: border-box;
+    margin:0;
+    padding:0;
+}
+/*Colors used*/
+:root {
+    --black: #111111;
+    --white: #ffffff;
+    --yellow: #f5c518;
+
+}
+
+body {
+    font-family: Arial, sans-serif;
+    font-weight: 300;
+    background: var(--black);
+}
+
+
+/*NAV*/
+nav {
+    background: var(--black);
+    padding: 0 48px;
+    height: 56px;
+    display:flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.nav-logo {
+    font-family: Impact, sans-serif;
+    color: var(--white);
+    font-size: 26px;
+}
+
+.nav-logo span {
+    color: var(--yellow);
+}
+
+.nav-links {
+    display: flex;
+    gap: 32px;
+    list-style: none;
+}
+
+.nav-links a {
+    color: var(--white);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    opacity: 0.75;
+    transition: opacity 0.2s;
+}
+
+.nav-links a:hover {
+    opacity: 1;
+}
+
+.hero{
+    background: var(--black);
+    padding: 80 px 48px 100 px;
+    min-height: calc(100vh - 56px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    max-width: 700 px;
+}
+
+/* project title*/
+.hero-title {
+    font-family: Impact, sans-seif;
+    font-size: clamp(64px, 10vw, 120px);
+    color: var(--white);
+    line-height: 0.93;
+    letter-spacing: -1px;
+    margin-bottom: 32px;
+    text-transform: uppercase;
+}
+
+.hero-title .accent{
+    color: var(--yellow);
+}
+
+/*short project desctiption*/
+.hero-subtitle{
+    color: var(--white);
+    font-family: George, serif;
+    font-size: 22px;
+    font-style: italic;
+    text-align: center;
+    line-height: 1.55;
+    margin-bottom: 40px;
+}
+
+.hero-meta{
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+/* team member section*/
+.hero-team-label{
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--white);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* name part*/
+.hero-team{
+    font-size: 14px;
+    color: var(--yellow);
+    letter-spacing: 1px;
+    font-family: George, serif;
+    text-transform: uppercase;
+
+}
