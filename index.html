@@ -10,25 +10,742 @@
     <nav>
         <div class="nav-logo">FiveStar<span>.</span></div>
         <ul class="nav-links">
-            <li><a href="#methods">Methods</a></li>
-            <li><a href="#results">Results</a></li>
+            <li><a href="#introduction">Introduction</a></li>
             <li><a href="#dataset">Dataset</a></li>
+            <li><a href="#cleaning">Cleaning</a></li>
+            <li><a href="#eda">EDA</a></li>
+            <li><a href="#missingness">Missingness</a></li>
+            <li><a href="#hypothesis">Hypothesis</a></li>
+            <li><a href="#modeling">Modeling</a></li>
+            <li><a href="#baseline-model">Base Model</a></li>
+            <li><a href="#optimized-model">Optimized Model</a></li>
+            <li><a href="#fairness">Fairness</a></li>
+            <li><a href="#conclusion">Conclusion</a></li>
         </ul>
     </nav>
 
-    <div class="hero">
+    <header class="hero">
         <h1 class="hero-title">
-            PREDICTING<br/>
-            <span class="accent">FIVE-STAR</span><br/>
+            PREDICTING<br />
+            <span class="accent">FIVE-STAR</span><br />
             REVIEWS
         </h1>
-        <p class="hero-subtitle">Using NLP and sentiment analysis to predict whether a recipe review will be five stars or not.</p>
+        <p class="hero-subtitle">
+            Using recipe review text, recipe metadata, and exploratory analysis to predict whether a recipe review will receive five stars.
+        </p>
         <div class="hero-meta">
-            <div class="hero-team-label"> Team Members:</div>
+            <div class="hero-team-label">Team Members:</div>
             <div class="hero-team">Tatianna Sanchez, Alex Hayslip, Whitney Deroche</div>
-        
         </div>
-    </div>
+    </header>
 
+    <main class="content">
+
+        <section id="introduction" class="section">
+            <h2>Introduction</h2>
+            <p>
+                This project investigates whether we can predict if a recipe review will receive a five-star rating using review text and recipe-related features.
+                Readers should care about this question because understanding what drives five-star ratings can help recipe creators write better recipes and help recipe platforms identify which content to promote more often.
+            </p>
+            <p>
+                Our central question is:
+                <strong>How accurately can we predict whether a recipe review submitted by a user will be five stars based on the review text and recipe characteristics?</strong>
+            </p>
+        </section>
+
+        <section id="dataset" class="section">
+            <h2>Dataset</h2>
+            <p>
+                Our project uses two datasets: a recipes dataset and an interactions dataset from Foods.com, which contains user reviews and ratings data from 2008 to 2018.
+                These datasets were merged together using a left join on the recipe identifier.
+            </p>
+
+            <h3>Relevant Columns</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Column</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>review</td><td>Text written by the user about the recipe</td></tr>
+                    <tr><td>rating</td><td>User rating assigned to the recipe</td></tr>
+                    <tr><td>minutes</td><td>Total time required to make the recipe</td></tr>
+                    <tr><td>tags</td><td>Recipe tags used for categorization</td></tr>
+                    <tr><td>ingredients</td><td>List of ingredients used in the recipe</td></tr>
+                    <tr><td>n_ingredients</td><td>Number of ingredients in the recipe</td></tr>
+                    <tr><td>submitted</td><td>Date the recipe was submitted</td></tr>
+                    <tr><td>avg_rating</td><td>Average rating across users</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section id="cleaning" class="section">
+            <h2>Data Cleaning</h2>
+
+            <h3>1. Merging the datasets</h3>
+            <p>
+                We merged the recipes and interactions datasets using a left join to retain all recipes, even those without review activity.
+            </p>
+            <pre><code>merged = recipes.merge(
+    interactions,
+    how="left",
+    left_on="id",
+    right_on="recipe_id"
+)</code></pre>
+
+            <h3>2. Replacing 0 ratings with missing values</h3>
+            <p>
+                All records where the value in the rating column was 0 were treated as missing and replaced with <code>NaN</code> so that missingness could be studied appropriately.
+            </p>
+            <pre><code>merged["rating"] = merged["rating"].replace(0, np.nan)</code></pre>
+
+            <h3>3. Dropping redundant columns</h3>
+            <p>
+                The columns <code>id</code>, <code>contributor_id</code>, <code>steps</code>, <code>description</code>, <code>user_id</code>, <code>date</code>, and <code>recipe_id</code> were removed from the merged dataset due to redundancy.
+            </p>
+            <pre><code>merged = merged.drop(
+    columns=["id", "contributor_id", "steps", "description", "user_id", "date", "recipe_id"],
+    errors="ignore"
+)</code></pre>
+
+            <h3>4. Expanding the nutrition column</h3>
+            <p>
+                The nutrition column was converted from a list-like string with seven values for each record into separate usable numeric columns such as
+                <code>calories</code>, <code>total_fat</code>, <code>sugar</code>, <code>sodium</code>, <code>protein</code>, <code>saturated_fat</code>, and <code>carbs</code>.
+                This was done so that nutrition categories could be used for exploratory data analysis and model building.
+            </p>
+            <pre><code>nutr_cols = ["calories", "total_fat", "sugar", "sodium", "protein", "saturated_fat", "carbs"]
+
+merged["nutrition"] = merged["nutrition"].apply(
+    lambda s: ast.literal_eval(s) if isinstance(s, str) else s
+)
+
+def ensure7(x):
+    return x if isinstance(x, list) and len(x) == 7 else [np.nan] * 7
+
+merged[nutr_cols] = pd.DataFrame(
+    merged["nutrition"].apply(ensure7).tolist(),
+    columns=nutr_cols,
+    index=merged.index
+)
+
+merged = merged.drop(columns=["nutrition"], errors="ignore")</code></pre>
+
+            <p>
+                After running the scripts, the dataset looks like this:
+            </p>
+            <img src="image/new_columns.png"
+                 alt="Expanded nutrition columns from the nutrition list"
+                 class="section-image">
+
+            <h3>5. Creating date-based features</h3>
+            <p>
+                We converted the submitted column into datetime format and extracted year, month, and month-year values for time-based analysis.
+            </p>
+            <pre><code>import datetime as dt
+
+merged["submitted"] = pd.to_datetime(merged["submitted"])
+merged["year"] = merged["submitted"].dt.year
+merged["month"] = merged["submitted"].dt.month_name()
+merged["month_year"] = merged["submitted"].dt.strftime("%B %Y")
+merged["date"] = merged["submitted"].dt.strftime("%m-%d-%Y")
+merged["month"] = merged["month"].astype("string")
+merged = merged.dropna(subset=["year"])
+merged["year"] = merged["year"].astype("int64")</code></pre>
+
+            <h3>6. Creating time-threshold indicators</h3>
+            <p>
+                We engineered Boolean columns for recipes taking 60, 30, or 15 minutes or less.
+            </p>
+            <pre><code>merged["60 Minutes or Less"] = np.where(merged["minutes"] &lt;= 60, True, False).astype(bool)
+merged["30 Minutes or Less"] = np.where(merged["minutes"] &lt;= 30, True, False).astype(bool)
+merged["15 Minutes or Less"] = np.where(merged["minutes"] &lt;= 15, True, False).astype(bool)</code></pre>
+
+            <h3>7. Creating meal type</h3>
+            <p>
+                A new <code>meal_type</code> feature was derived from recipe tags to group recipes into categories such as dessert, breakfast, lunch, snack, and dinner.
+            </p>
+            <pre><code>import ast
+
+merged["tags"] = merged["tags"].apply(
+    lambda x: ast.literal_eval(x) if isinstance(x, str) else x
+)
+
+def get_meal_type(tags):
+    if not isinstance(tags, list):
+        return "other"
+
+    tags_lower = [t.lower() for t in tags]
+
+    if any("dessert" in t for t in tags_lower):
+        return "dessert"
+    if any("breakfast" in t for t in tags_lower):
+        return "breakfast"
+    if any("lunch" in t for t in tags_lower):
+        return "lunch"
+    if any("snack" in t for t in tags_lower):
+        return "snack"
+    if any("dinner" in t for t in tags_lower):
+        return "dinner"
+
+    return "other"
+
+merged["meal_type"] = merged["tags"].apply(get_meal_type)</code></pre>
+
+            <p>
+                The following code returns the total number of meal types identified from the previous script:
+            </p>
+            <pre><code>merged["meal_type"].value_counts()
+
+meal_type
+other        144497
+dessert       34641
+dinner        21880
+lunch         17004
+breakfast     14992
+snack          1415</code></pre>
+
+            <h3>8. Creating an hours column</h3>
+            <p>
+                The following code creates a new column called <code>Hours</code> by dividing the <code>minutes</code> column by 60.
+                This is used to detect trends in exploratory data visualization based on how long recipes take to prepare.
+            </p>
+            <pre><code>merged["Hours"] = merged["minutes"] / 60</code></pre>
+
+            <h3>9. Outlier removal</h3>
+            <p>
+                We applied the IQR rule to numeric columns to remove extreme outliers that could distort visual analysis and modeling.
+            </p>
+            <pre><code>cols = [
+    "minutes",
+    "n_steps",
+    "n_ingredients",
+    "calories",
+    "total_fat",
+    "sugar",
+    "sodium",
+    "protein",
+    "saturated_fat",
+    "carbs",
+    "Hours"
+]
+
+for col in cols:
+    Q1 = merged[col].quantile(0.25)
+    Q3 = merged[col].quantile(0.75)
+    IQR = Q3 - Q1
+
+    lower = Q1 - 1.5 * IQR
+    upper = Q3 + 1.5 * IQR
+
+    merged = merged[
+        (merged[col] &gt;= lower) &amp;
+        (merged[col] &lt;= upper)
+    ]</code></pre>
+        </section>
+
+        <section id="eda" class="section">
+            <h2>Exploratory Data Analysis</h2>
+
+            <h3>Distribution Shapes</h3>
+            <p>
+                Histograms showed that hours, sugar, and calories were right-skewed, while ratings were left-skewed.
+                This suggests that transformations may be useful in downstream machine learning pipelines.
+            </p>
+
+            <img src="image/hours_spent_cooking.png"
+                 alt="Distribution of cooking time in hours"
+                 class="section-image">
+
+            <img src="image/total_calories.png"
+                 alt="Distribution of calories"
+                 class="section-image">
+
+            <img src="image/recipe_ratings.png"
+                 alt="Distribution of recipe ratings from 0 to 5"
+                 class="section-image">
+
+            <img src="image/total_sugar_consumed.png"
+                 alt="Distribution of total sugar consumed"
+                 class="section-image">
+
+            <h3>Meal Type Counts</h3>
+            <p>
+                Dessert was the most common meal type represented in the dataset after excluding recipes labeled as "other".
+            </p>
+            <img src="image/meal_types.png"
+                 alt="Count of recipes by meal type"
+                 class="section-image">
+
+            <h3>Review Trends Over Time</h3>
+            <p>
+                A line chart showed a general decline in review volume across most meal types over time, with snack recipes as an exception.
+            </p>
+            <img src="image/recipe_reviews.png"
+                 alt="Line graph of recipe reviews by meal type from 2008 to 2018"
+                 class="section-image">
+
+            <h3>Cooking Time by Meal Type</h3>
+            <p>
+                Box plots indicated that desserts and dinners generally take the longest to prepare, while lunch and snack recipes take the least time.
+            </p>
+            <img src="image/meal_type.png"
+                 alt="Boxplot of cooking time by meal type"
+                 class="section-image">
+
+            <h3>Average Rating by Meal Type</h3>
+            <p>
+                The following code computes the mean ratings by meal type. Mean ratings were high across all meal types, generally at or above 4.6,
+                suggesting that the dataset is skewed toward favorable reviews.
+            </p>
+            <pre><code>food_group_ratings = (
+    merged.pivot_table(
+        index="meal_type",
+        values="rating",
+        aggfunc="mean"
+    )
+    .rename(columns={"rating": "Average Rating"})
+    .sort_values(by="Average Rating", ascending=False)
+)</code></pre>
+
+            <img src="image/average_rating.png"
+                 alt="Average rating by meal type"
+                 class="section-image">
+        </section>
+
+        <section id="missingness" class="section">
+            <h2>Assessment of Missingness</h2>
+
+            <h3>Rating Missingness</h3>
+            <p>
+                We believe the <code>rating</code> column may be <strong>NMAR</strong> because whether a rating is missing may depend on the number of steps that a user must complete to cook the meal.
+                A user who is frustrated with the amount of steps required to make a meal may be disincentivized to leave a review.
+            </p>
+
+
+            <h3>Permutation Test</h3>
+            <p>
+                We tested whether rating missingness was associated with <code>n_steps</code>.
+                
+                Null Hypothesis: The missingness in the rating column is independent of the Number of Steps column.
+                Alternate Hypothesis: The missingness in the rating column depends on the Number of Steps column.
+
+<pre><code>
+testing1 = merged[["Number of Steps", "rating"]].copy() 
+testing1["missing_ratings"] = testing1["rating"].isna() 
+testing1.head(5) 
+observed = abs(testing1.groupby("missing_ratings")["Number of Steps"].mean().diff().iloc[-1]) 
+
+n_reps = 5000
+stats = []
+
+for _ in range(n_reps):
+    shuffled_missing = np.random.permutation(testing1["missing_ratings"].values)
+    
+    temp = testing1.copy()
+    temp["missing_ratings"] = shuffled_missing
+    
+    stat = abs(
+        temp.groupby("missing_ratings")["Number of Steps"]
+        .mean()
+        .diff()
+        .iloc[-1]
+    )
+    
+    stats.append(stat)
+
+    p_value = (np.sum(np.array(stats) >= observed) + 1) / (n_reps + 1)
+    p_value
+
+    </code></pre>
+
+
+                
+The observed difference in means was 0.5735, with a p-value of 0.0001.
+The p-value from the permutation test is approximately 0.0001, which is less than the significance level of 0.05. Therefore, we reject the null hypothesis that the missingness of ratings is independent of the number of steps. This provides evidence that the probability of a rating being missing depends on recipe complexity, suggesting that the ratings are Missing At Random (MAR) with respect to the number of steps.
+        
+
+</p>
+
+<img src="image/permutation_distrubtion_value.png"
+alt="Chart to Display Missingess in Permutation Test"
+    class="section-image">
+
+
+        </section>
+
+        <section id="hypothesis" class="section">
+            <h2>Hypothesis Test</h2>
+
+            <p>
+                We tested whether there is an association between cooking time in hours and recipe rating.
+            </p>
+
+            <h3>Null Hypothesis</h3>
+            <p>
+                There is no association between cooking time in hours and recipe rating.
+            </p>
+
+            <h3>Alternative Hypothesis</h3>
+            <p>
+                There is an association between cooking time in hours and recipe rating.
+            </p>
+
+            <h3>Test Used</h3>
+            <p>
+                We used a Spearman correlation test because the relationship between hours and rating did not appear to be linear.
+                The Spearman correlation test is appropriate in this situation because it measures whether two variables move together in a monotonic relationship.
+            </p>
+
+            <img src="image/scatterplot.png"
+                 alt="Scatterplot of cooking time in hours and recipe ratings"
+                 class="section-image">
+
+            <p>
+                After running the Spearman correlation test, we found that longer cooking times were associated with slightly lower ratings.
+                However, the effect of this relationship is negligible in practice.
+            </p>
+
+            <pre><code>Spearman correlation coefficient: -0.0282
+p-value: 9.8985e-25</code></pre>
+
+            <p>
+                Since the p-value is below the alpha level of 0.05, we reject the null hypothesis.
+                However, the correlation coefficient is extremely close to zero, indicating that the relationship is statistically significant but practically negligible.
+                There is some evidence of a monotonic relationship where ratings decrease slightly as cooking time increases.
+            </p>
+
+            <img src="image/cooking_time_scatterplot.png"
+                 alt="Scatterplot of cooking time in hours and recipe ratings with fitted line"
+                 class="section-image">
+        </section>
+
+        <section id="modeling" class="section">
+            <h2>Modeling and Prediction</h2>
+            <p>
+                Our broader project goal is to predict whether a recipe review will receive a five-star rating using recipe metadata,
+                engineered features, and review-related information.
+                We first built a baseline model, then developed an optimized model, and finally evaluated fairness across meaningful recipe subgroups.
+            </p>
+        </section>
+
+        <section id="baseline-model" class="section">
+            <h2>Base Machine Learning Model</h2>
+
+            <p>
+                Our first predictive model serves as a baseline for determining whether a review will receive a five-star rating based on features.
+                The purpose of this model is to establish an interpretable starting point before adding more advanced feature engineering and optimization.
+            </p>
+
+            <h3>Target Variable</h3>
+            <p>
+                The response variable for our classification task is whether a review received a five-star rating.
+                We encoded the column is_five_star as a Boolean outcome, where <code>True</code> indicates a five-star review and
+                <code>False</code> indicates any lower rating than five stars. The code to perform this sequence is the following
+            </p>
+
+    <pre><code>merged["is_five_star"] = (
+    np.where(merged["rating"] == 5, True, False).astype(bool)
+)</code></pre>
+
+            <h3>Features Used</h3>
+            <p>
+                In the baseline model, we used structured numeric recipe-related features that were available after cleaning the dataset.
+                These included variables such as review_length, calories, Nubmer of Steps, Number of Ingredients and Total Minutes.
+                We selected these features because they are interpretable and provide a simple foundation for prediction.
+            </p>
+
+<pre><code>
+feature_cols = [
+    "review_length",
+    "calories",
+    "Number of Steps",
+    "Number of Ingredients",
+    "Total Minutes"
+]    
+</code></pre>
+
+            <h3>Model Choice</h3>
+            <p>
+                We used a logistic regression classifier as our baseline model because it is efficient, interpretable,
+                and well-suited for binary classification tasks.
+                Logistic regression also provides a strong benchmark for evaluating whether more complex models meaningfully improve predictive performance.
+            </p>
+
+            <h3>Pipeline</h3>
+            <p>
+                Our baseline pipeline included preprocessing steps for both numeric and categorical variables.
+                Numeric columns were imputed and scaled, while categorical columns were one-hot encoded.
+                This ensured that the model could handle mixed data types appropriately. The following represents the process required to 
+            </p>
+
+            <pre><code>
+classification = merged[feature_cols + ["is_five_star"]].dropna(subset=["review_length"])
+
+X = classification[feature_cols].to_numpy()
+Y = classification["is_five_star"].to_numpy()
+
+from sklearn.model_selection import train_test_split
+X_train, X_test, Y_train, Y_test = train_test_split(
+    X, Y, test_size=0.25, shuffle=True, random_state=1
+)
+
+from sklearn.preprocessing import StandardScaler
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+from sklearn.linear_model import LogisticRegression
+lr = LogisticRegression(max_iter=1000, random_state=1, class_weight='balanced')
+lr.fit(X_train, Y_train)
+
+Y_pred = lr.predict(X_test)
+Y_prob = lr.predict_proba(X_test)[:, 1]
+
+Y_test_i = Y_test.astype(int)
+Y_pred_i = Y_pred.astype(int)
+
+</code></pre>
+
+
+            <h3>Evaluation</h3>
+            <p>
+                We evaluated the baseline model using classification metrics including accuracy, precision, recall, F1-score, and ROC-AUC.
+                Because the dataset is skewed toward favorable ratings, metrics beyond accuracy were important for understanding the model's predictive behavior.
+            </p>
+
+            <p>
+                The baseline classifier achieved an accuracy of 53.4% and an ROC-AUC score of 0.52, indicating that the model performs only slightly better than random guessing. While the model demonstrates moderate precision (0.74) when predicting five-star reviews, recall is relatively low (0.56), meaning that a substantial portion of actual five-star reviews are misclassified. 
+                However, its performance suggested that additional information such as review text, tags, and ingredients may improve prediction. The biggest problems with this classifier was that it displayed moderate precision, has poor recall, has weak discriminative ability and has similar performance to randomly guessing the target variable.
+            </p>
+
+    <img src="image/confusion_matrix.png"
+    alt="Confusion Matrix of Base Logistic Regression Model"
+    class="section-image">
+        </section>
+
+        <section id="optimized-model" class="section">
+            <h2>Optimized Machine Learning Model</h2>
+
+            <p>
+                The process to arrive at the model that performed the best involved our team trying several models for the Logistic Regression classifier, Decision Tree classifier as well as the Naive Bayes classifier. 
+                After some deliberation, we discovered that a fully optimized logistic regression classificaton model performed the best when optimized to account for new numeric and text features, transformations and cross validation. 
+                
+                After establishing a baseline, we developed an optimized logistic regression model to improve predictive performance.
+                The main goal of the optimized model was to capture more nuanced signals from recipe content and review behavior.
+            </p>
+
+            <h3>Additional Features</h3>
+            <p>
+                In the optimized model, we expanded the feature set to include more informative variables such as review, tags as well as ingredients. Additionally, two new columns tags list and ingreidents list were created to extract more metadata from the tags and inredients columns using lambda functionality. 
+                These additions allowed the model to incorporate both recipe metadata and richer textual or categorical context.
+            </p>
+            <pre><code>
+feature_cols = ["review_length","calories","Number of Steps","Number of Ingredients","Total Minutes"]
+text_col = "review"
+target_col = "is_five_star"
+classification2= merged[feature_cols + [text_col, "tags", "ingredients", target_col]].dropna(subset=[target_col]).copy()
+
+classification2["tags_list"] = classification2["tags"].apply(parse_maybe_list)
+classification2["ingredients_list"] = classification2["ingredients"].apply(parse_maybe_list)
+
+classification2["tags_text"] = classification2["tags_list"].apply(lambda xs: " ".join(map(str, xs))).fillna("")
+classification2["ingredients_text"] = classification2["ingredients_list"].apply(lambda xs: " ".join(map(str, xs))).fillna("")
+
+X = classification2[feature_cols + [text_col, "tags_text", "ingredients_text"]]
+Y = classification2[target_col].astype(int).to_numpy()
+</code></pre>
+
+            <h3>Feature Engineering</h3>
+            <p>
+                Several feature engineering steps were applied to improve model quality.
+                These included log transformations for skewed numeric variables, vectorization of text-based inputs, and encoding of high-cardinality categorical information such as recipe tags and ingredients. 
+
+To process all of these changes, a numeric pipeline were constructed to convert the numeric features to a np.array, perform log transformations on all columns as well as perform standard scaling. 
+ <pre><code>
+def to_numeric_array(df):
+    return df.apply(pd.to_numeric, errors="coerce").fillna(0).to_numpy(dtype=np.float64)
+
+def lop1p_array(arr):
+    arr = np.asarray(arr, dtype=np.float64)
+    arr = np.clip(arr, 0, None)
+    return np.log1p(arr)
+
+numeric_pipe = Pipeline(steps=[
+    ("to_num", FunctionTransformer(to_numeric_array, validate=False)),
+    ("lop1p", FunctionTransformer(lop1p_array, validate=True)),
+    ("scale", MaxAbsScaler()),
+])
+</code></pre>
+
+Additionally, a text pipeline was created to vectorize the text content in the review, tags_text and ingreidents_text columns.
+ <pre><code>
+def clean_text(s):
+    return s.fillna("").astype(str)
+
+def make_text_pipe(max_features, ngram_range=(1,1), stop_words=None, min_df=1):
+    return Pipeline(steps=[
+        ("clean", FunctionTransformer(clean_text, validate=False)),
+        ("tfidf", TfidfVectorizer(
+            max_features=max_features,
+            ngram_range=ngram_range,
+            stop_words=stop_words,
+            min_df=min_df
+        ))
+    ])
+</code></pre>
+                
+The preprocessing pipeline was built to combine both of these pipelines together and train the logistic regression model.
+ <pre><code>
+preprocess = ColumnTransformer(
+    transformers=[
+        ("num", numeric_pipe, feature_cols),
+        ("rev", make_text_pipe(2000, (1, 1), stop_words="english"), "review"),
+        ("tag", make_text_pipe(1000, (1, 2), stop_words=None, min_df=5), "tags_text"),
+        ("ingredients", make_text_pipe(2000, (1,2), stop_words=None, min_df=5), "ingredients_text")
+    ],
+    remainder="drop"
+)
+
+model = Pipeline(steps=[
+    ("preprocess", preprocess),
+    ("clf", LogisticRegression(max_iter=2000, class_weight="balanced", random_state=1))
+])
+</code></pre>
+</p>
+
+            <h3>Model Tuning</h3>
+            <p>
+                We optimized the model using StratifedKFold as well as Grid SearchCV for cross fold validation. Additionally, we performed hyperparameter tuning on 9 different possible c values. 
+                This allowed us to compare multiple parameter settings and identify the configuration that produced the strongest out-of-sample performance.
+                Our optimization process focused on improving generalization rather than simply fitting the training data.
+            </p>
+
+            <pre><code>
+from sklearn.model_selection import StratifiedKFold, GridSearchCV
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=1)
+
+param_grid = {
+    "clf__C": [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10]
+}
+grid = GridSearchCV(
+    estimator=model,
+    param_grid=param_grid,
+    scoring="f1",
+    cv=cv,
+    n_jobs=-1
+)
+
+grid.fit(X, Y)
+
+scoring = {
+    "roc_auc": "roc_auc",
+    "accuracy": "accuracy",
+    "precision": "precision",
+    "recall": "recall",
+    "f1": "f1",
+}
+
+best_model = grid.best_estimator_
+
+cv_results = cross_validate(
+    best_model, X, Y, cv=cv, scoring=scoring, n_jobs=-1, return_train_score=False
+)
+
+Y_pred_cv = cross_val_predict(best_model, X, Y, cv=cv, method="predict", n_jobs=-1)
+
+Y_prob_cv = cross_val_predict(best_model, X, Y, cv=cv, method="predict_proba", n_jobs=-1)[:, 1]
+            </pre>
+
+            <h3>Performance Comparison</h3>
+            <p>
+                The optimized model signicantly outperformed the baseline model across several evaluation metrics.
+                In particular, there are dramatic improvements in the ROC-AUC (29%), Recall (20%) and F1 Score (18%) suggested that the additional features and tuning process helped the model better distinguish between five-star reviews, which was lacking in the base model.
+            </p>
+
+                <img src="image/confusion_matrix_2.png"
+                 alt="Confusion Matrix of Fully Optimized Logistic Regression Model"
+                 class="section-image">
+        </section>
+
+        <section id="fairness" class="section">
+            <h2>Fairness Evaluation</h2>
+
+            <p>
+                In addition to predictive performance, we evaluated whether the final model behaved consistently across different subgroups in the dataset.
+                This step is important because a model that performs well overall may still produce uneven outcomes for certain categories of recipes.
+            </p>
+
+            <h3>Why Fairness Matters</h3>
+            <p>
+                A fairness analysis helps determine whether the classifier systematically favors or disadvantages certain groups.
+                In our project, subgroup analysis is especially relevant because recipes differ substantially by characteristics such as calorie group, ingredient group, time group and review group.
+            </p>
+
+            <h3>Subgroups Examined</h3>
+            <p>
+                We examined fairness across several subgroup definitions, including calorie-based groups, ingredient complexity groups, time-based groups and review groups (long review or short review).
+                These subgroup categories were chosen because they reflect meaningful differences in recipe structure and may influence how the model makes predictions.
+            </p>
+
+            <h3>Metrics Used</h3>
+            <p>
+                We compared positive prediction rates and classification performance across groups using metrics such as accuracy, precision, recall, and F1-score.
+                We also examined demographic parity gaps to identify whether the model predicted five-star outcomes at meaningfully different rates across subgroups.
+            </p>
+
+<pre><code>
+Fairness Summary (Gap Between Subgroups)
+
+group_type        positive_rate_gap accuracy_gap precision_gap recall_gap f1_gap roc_auc_gap TPR_gap FPR_gap
+-------------------------------------------------------------------------------------------------------------
+calorie_group           0.0166        0.0005        0.0018       0.0068    0.0047     0.0041    0.0068  0.0181
+ingredient_group        0.0169        0.0002        0.0000       0.0074    0.0043     0.0058    0.0074  0.0205
+time_group              0.0548        0.0178        0.0008       0.0415    0.0246     0.0023    0.0415  0.0478
+review_group            0.0009        0.0262        0.0148       0.0210    0.0185     0.0357    0.0210  0.0411
+
+<img src="image/disparity_summary.png"
+alt="Disparity Summary for Fully Optimized"
+class="section-image">
+</code></pre>
+
+<h3>Results</h3>
+<p>
+Overall, the fairness analysis suggested that the optimized logistic regression model does not exhibit severe bias across the evaluated subgroups, though some differences in positive prediction rates were observed. 
+The largest disparities appeared when comparing recipe time categories, where quick recipes were slightly more likely to receive positive predictions than longer recipes. 
+Other subgroup comparisons, such as calorie level, ingredient complexity, and review length, showed relatively small differences in prediction behavior.
+</p>
+
+<p>
+While these gaps were not large enough to indicate substantial model bias, they highlight areas where the model may respond differently to certain recipe characteristics. 
+These differences are useful for identifying where additional feature inspection, calibration, or threshold adjustments could improve consistency in model predictions.
+</p>
+
+<p>
+This analysis highlights that model evaluation should go beyond overall accuracy. 
+Even when a classifier performs well in aggregate, subgroup-level checks are necessary to ensure that predictions remain consistent and interpretable across different parts of the dataset. 
+Performing fairness analysis alongside standard performance metrics helps build more transparent and trustworthy machine learning systems.
+</p>
+
+<img src="image/demographic_parity.png"
+alt="Demographic Parity Per group Per Fully Optimized Model"
+class="section-image">
+        </section>
+
+        <section id="conclusion" class="section">
+            <h2>Conclusion</h2>
+            <p>
+                Overall, this project shows that recipe metadata and review text can help predict whether a user is exceedingly satsified with a recipe and is likely to leave a five star review. 
+                While cooking time (in hours) has only a negligible relationship with ratings, other features such as review text, ingredient structure, the text of tags on the review and a meal's nutritional content may be more useful for predicting five-star outcomes.
+            </p>
+            <p>
+                Our modeling results suggest that machine learning can be used to meaningfully classify five-star reviews, especially when richer engineered features are included and cross validation has been performed.
+                At the same time, fairness evaluation remains an important part of the process to ensure that strong overall model performance does not mask subgroup-level disparities.
+            </p>
+        </section>
+
+    </main>
 </body>
 </html>
