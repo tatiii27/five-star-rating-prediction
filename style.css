@@ -1,41 +1,64 @@
-
-*, *::before, *::after { 
+/* =========================
+   Global Reset
+========================= */
+*, *::before, *::after {
     box-sizing: border-box;
-    margin:0;
-    padding:0;
+    margin: 0;
+    padding: 0;
 }
-/*Colors used*/
+
+/* =========================
+   Theme Variables
+========================= */
 :root {
     --black: #111111;
     --white: #ffffff;
     --yellow: #f5c518;
+    --light-gray: #f4f4f4;
+    --mid-gray: #d9d9d9;
+    --dark-gray: #2a2a2a;
+    --text-gray: #555555;
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+    --radius: 16px;
+    --max-width: 1400px;
+}
 
+/* =========================
+   Base Page Styles
+========================= */
+html {
+    scroll-behavior: smooth;
 }
 
 body {
     font-family: Arial, sans-serif;
     font-weight: 300;
     background: var(--black);
+    color: var(--white);
+    line-height: 1.6;
 }
 
-
-/*NAV*/
+/* =========================
+   Navigation
+========================= */
 nav {
-    background: var(--black);
+    background: rgba(17, 17, 17, 0.96);
     padding: 0 48px;
-    height: 56px;
-    display:flex;
+    height: 64px;
+    display: flex;
     align-items: center;
     justify-content: space-between;
     position: sticky;
     top: 0;
     z-index: 100;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .nav-logo {
     font-family: Impact, sans-serif;
     color: var(--white);
-    font-size: 26px;
+    font-size: 28px;
+    letter-spacing: 0.5px;
 }
 
 .nav-logo span {
@@ -44,84 +67,302 @@ nav {
 
 .nav-links {
     display: flex;
-    gap: 32px;
+    gap: 28px;
     list-style: none;
+    flex-wrap: wrap;
 }
 
 .nav-links a {
     color: var(--white);
     text-decoration: none;
     font-size: 13px;
-    font-weight: 500;
-    letter-spacing: 0.5px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
     text-transform: uppercase;
-    opacity: 0.75;
-    transition: opacity 0.2s;
+    opacity: 0.78;
+    transition: opacity 0.2s ease, color 0.2s ease;
 }
 
-.nav-links a:hover {
+.nav-links a:hover,
+.nav-links a:focus {
     opacity: 1;
+    color: var(--yellow);
 }
 
-.hero{
+/* =========================
+   Hero
+========================= */
+.hero {
     background: var(--black);
-    padding: 80 px 48px 100 px;
-    min-height: calc(100vh - 56px);
+    min-height: calc(100vh - 64px);
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    max-width: 700 px;
+    padding: 80px 48px 100px;
+    max-width: 900px;
+    margin: 0 auto;
+    text-align: center;
 }
 
-/* project title*/
 .hero-title {
-    font-family: Impact, sans-seif;
+    font-family: Impact, sans-serif;
     font-size: clamp(64px, 10vw, 120px);
     color: var(--white);
     line-height: 0.93;
     letter-spacing: -1px;
-    margin-bottom: 32px;
+    margin-bottom: 28px;
     text-transform: uppercase;
 }
 
-.hero-title .accent{
+.accent {
     color: var(--yellow);
 }
 
-/*short project desctiption*/
-.hero-subtitle{
+.hero-subtitle {
     color: var(--white);
-    font-family: George, serif;
+    font-family: Georgia, serif;
     font-size: 22px;
     font-style: italic;
     text-align: center;
     line-height: 1.55;
-    margin-bottom: 40px;
+    margin-bottom: 36px;
+    max-width: 760px;
+    opacity: 0.95;
 }
 
-.hero-meta{
+.hero-meta {
     display: flex;
     align-items: center;
-    gap: 20px;
+    justify-content: center;
+    gap: 18px;
     flex-wrap: wrap;
 }
 
-/* team member section*/
-.hero-team-label{
+.hero-team-label {
     font-size: 12px;
-    font-weight: bold;
+    font-weight: 700;
     color: var(--white);
     text-transform: uppercase;
     letter-spacing: 1px;
 }
 
-/* name part*/
-.hero-team{
+.hero-team {
     font-size: 14px;
     color: var(--yellow);
     letter-spacing: 1px;
-    font-family: George, serif;
+    font-family: Georgia, serif;
     text-transform: uppercase;
+}
 
+/* =========================
+   Main Content Wrapper
+========================= */
+.content {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+}
+
+/* =========================
+   Section Cards
+========================= */
+.section {
+    background: var(--white);
+    color: var(--black);
+    margin-bottom: 36px;
+    padding: 36px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+
+.section h2 {
+    font-size: 2rem;
+    line-height: 1.2;
+    margin-bottom: 18px;
+    color: var(--black);
+}
+
+.section h3 {
+    font-size: 1.2rem;
+    margin-top: 26px;
+    margin-bottom: 10px;
+    color: var(--dark-gray);
+}
+
+.section-image {
+    display: block;
+    width: 70%;
+    max-width: 700px;
+    margin: 20px auto;
+}
+
+.section p {
+    margin-bottom: 14px;
+    color: var(--black);
+}
+
+.section strong {
+    font-weight: 700;
+}
+
+/* =========================
+   Tables
+========================= */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 18px;
+    background: var(--white);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+thead {
+    background: var(--light-gray);
+}
+
+th,
+td {
+    border: 1px solid #dddddd;
+    padding: 12px 14px;
+    text-align: left;
+    vertical-align: top;
+    color: var(--black);
+}
+
+th {
+    font-weight: 700;
+}
+
+/* =========================
+   Code Blocks
+========================= */
+pre {
+    background: #1b1b1b;
+    color: #f8f8f2;
+    padding: 16px 18px;
+    border-radius: 12px;
+    overflow-x: auto;
+    margin: 14px 0 18px;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+code {
+    font-family: "Courier New", Courier, monospace;
+}
+
+/* Inline code */
+p code,
+li code,
+td code {
+    background: #f0f0f0;
+    color: #111111;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-size: 0.95em;
+}
+
+/* =========================
+   Plot Placeholder
+========================= */
+.plot-placeholder {
+    margin-top: 20px;
+    padding: 30px;
+    border: 2px dashed #bdbdbd;
+    border-radius: 12px;
+    text-align: center;
+    color: var(--text-gray);
+    background: #fafafa;
+    font-style: italic;
+}
+
+/* =========================
+   Links Inside Sections
+========================= */
+.section a {
+    color: #0b57d0;
+    text-decoration: none;
+}
+
+.section a:hover,
+.section a:focus {
+    text-decoration: underline;
+}
+
+/* =========================
+   Responsive Design
+========================= */
+@media (max-width: 900px) {
+    nav {
+        padding: 12px 20px;
+        height: auto;
+        align-items: flex-start;
+        gap: 12px;
+        flex-direction: column;
+    }
+
+    .nav-links {
+        gap: 14px;
+    }
+
+    .hero {
+        min-height: auto;
+        padding: 72px 24px 72px;
+    }
+
+    .hero-subtitle {
+        font-size: 20px;
+    }
+
+    .section {
+        padding: 28px 22px;
+    }
+}
+
+@media (max-width: 640px) {
+    .nav-logo {
+        font-size: 24px;
+    }
+
+    .nav-links {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .hero-title {
+        font-size: clamp(48px, 14vw, 72px);
+    }
+
+    .hero-subtitle {
+        font-size: 18px;
+    }
+
+    .hero-meta {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .content {
+        padding: 24px 14px 60px;
+    }
+
+    .section {
+        padding: 22px 18px;
+    }
+
+    .section h2 {
+        font-size: 1.65rem;
+    }
+
+    .section h3 {
+        font-size: 1.05rem;
+    }
+
+    th,
+    td {
+        padding: 10px;
+        font-size: 0.95rem;
+    }
 }
