@@ -243,54 +243,63 @@ merged['meal_type'] = merged['tags'].apply(get_meal_type)</code></pre>
             </p>
 
 
-            <h3>Missing Dependency Tests</h3>
+            <h3>Missingness Dependency Tests</h3>
             <p>
-                We tested whether rating missingness was associated with <code>n_steps</code>.
+                We tested whether the missingness of the <code>description</code> column depends on other columns.
+<pre><code>
+    merged['desc_missing'] = merged['description'].isna()
+    print(f'missing descriptions: {merged["desc_missing"].sum()}')
+</code></pre>
+
+            <h4>Test 1: Description Missingness -- Number of Ingredients</h4>
+            <p>We compared what the distribution of <code>n_ingredients</code> looks like for recipes that have descriptions vs recipes that don't.</p>
                 
-                Null Hypothesis: The missingness in the rating column is independent of the Number of Steps column.
-                Alternate Hypothesis: The missingness in the rating column depends on the Number of Steps column.
+               <!--Add KDE PLOT-->
+            
+            <p>The distributions looked different, so we ran a permutation test to check if the difference was statistically significant. We shuffled the missingness labels 1000 times and compared the difference in means each time to what we actually observed.</p>
 
 <pre><code>
-testing1 = merged[["Number of Steps", "rating"]].copy() 
-testing1["missing_ratings"] = testing1["rating"].isna() 
-testing1.head(5) 
-observed = abs(testing1.groupby("missing_ratings")["Number of Steps"].mean().diff().iloc[-1]) 
+    observed_stat = merged.groupby('desc_missing')['n_ingredients'].mean().diff().iloc[-1]
+    print(f'Observed difference: {observed_stat:.4f}')
 
-n_reps = 5000
-stats = []
+    n_reps = 1000
+    shuffled_stats = []
+    for _ in range(n_reps):
+        shuffled = np.random.permutation(merged['desc_missing'])
+        diff = merged.assign(desc_missing=shuffled).groupby('desc_missing')['n_ingredients'].mean().diff().iloc[-1]
+        shuffled_stats.append(diff)
 
-for _ in range(n_reps):
-    shuffled_missing = np.random.permutation(testing1["missing_ratings"].values)
-    
-    temp = testing1.copy()
-    temp["missing_ratings"] = shuffled_missing
-    
-    stat = abs(
-        temp.groupby("missing_ratings")["Number of Steps"]
-        .mean()
-        .diff()
-        .iloc[-1]
-    )
-    
-    stats.append(stat)
+    p_value = np.mean(np.abs(shuffled_stats) >= np.abs(observed_stat))
+    print(f'p-value: {p_value}')
+</code></pre>
+            <p>
+                The observed difference in means was -1.1335 and the p-value was 0.001. Since p &lt; 0.05, we reject the null hypothesis, meaning that description missingness <strong>does depend on</strong> <code>n_ingredients</code>. Recipes with fewer ingredients are more likely to skip the description.
+            </p>
+            <!--Permuatation test plot-->
 
-    p_value = (np.sum(np.array(stats) >= observed) + 1) / (n_reps + 1)
-    p_value
+            <h4>Test 2: Description Missingess -- Minutes</h4>
+            <p>We ran the same test but with <code>minutes</code> instead of <code>n_ingredients</code> to see if cooking time has anything to do with whether a recipe has a description.</p>
 
-    </code></pre>
+<pre><code>
+    observed_stat_min = merged.groupby('desc_missing')['minutes'].mean().diff().iloc[-1]
+    print(f'Observed difference: {observed_stat_min:.4f}')
 
+    n_reps = 1000
+    shuffled_stats_min = []
+    for _ in range(n_reps):
+        shuffled = np.random.permutation(merged['desc_missing'])
+        diff = merged.assign(desc_missing=shuffled).groupby('desc_missing')['minutes'].mean().diff().iloc[-1]
+        shuffled_stats_min.append(diff)
 
-                
-The observed difference in means was 0.5735, with a p-value of 0.0001.
-The p-value from the permutation test is approximately 0.0001, which is less than the significance level of 0.05. Therefore, we reject the null hypothesis that the missingness of ratings is independent of the number of steps. This provides evidence that the probability of a rating being missing depends on recipe complexity, suggesting that the ratings are Missing At Random (MAR) with respect to the number of steps.
-        
+    p_value_min = np.mean(np.abs(shuffled_stats_min) >= np.abs(observed_stat_min))
+    print(f'p-value: {p_value_min}')    
+</code></pre>
 
-</p>
-
-<img src="image/permutation_distrubtion_value.png"
-alt="Chart to Display Missingess in Permutation Test"
-    class="section-image">
-
+            <p>
+                The observed difference was -42.28 and the p-value was about 0.47. Since p &gt; 0.05, we fail to reject the null, meaning that description missingness <strong>does not depend on</strong> <code>minutes</code>. Whether a recipe has a description has nothing to do with how long it takes to cook.
+            </p>
+            
+            <!-- plot for test 2--->
 
         </section>
 
