@@ -374,7 +374,14 @@ print(f"p-value: {p_value:.3f}")
 
     </code></pre>
 
-<p>The observed difference in the mean number of steps between recipes with missing and non-missing ratings was 0.7194. The permutation test produced a p-value of approximately 0.229, which is above the significance level of 0.05. Therefore, we fail to reject the null hypothesis that description missingness is independent of the number of steps. This suggests that the probability of a description being missing is not contingent on the number of steps displayed in the recipe. The missingness mechanism is Missing Completely At Random (MCAR)..</p>
+<p>
+    The observed difference in the mean number of steps between recipes with missing and non-missing descriptions was 0.7194. 
+The permutation test produced a p-value of approximately 0.229, which is above the significance level of 0.05. 
+Therefore, we fail to reject the null hypothesis that description missingness is independent of the number of steps.
+
+This suggests that there is no strong evidence that missingness in the <code>description</code> column depends on the number of steps. 
+However, this alone is not sufficient to conclude that the data are Missing Completely At Random (MCAR), since missingness may still depend on other variables.
+</p>
 
 <img src="image/permutation_1.png"
 alt="Permutation Distribution for Description Missingness Test"
@@ -449,10 +456,11 @@ print(f"p-value: {p_value:.4f}")</code></pre>
      class="section-image">
 
 <p>
-    The observed difference in the mean number of ingredients between recipes with missing and non-missing descriptions was -1.1335. 
-    The permutation test produced a p-value of approximately 0.003, which is below the significance level of 0.05. 
-    Therefore, we reject the null hypothesis and conclude that missingness in the <code>description</code> column is associated with the number of ingredients. 
-    This suggests that description missingness is more consistent with <strong>Missing At Random (MAR)</strong> than <strong>Missing Completely At Random (MCAR)</strong>.
+   The observed difference in the mean number of ingredients between recipes with missing and non-missing descriptions was -1.1335. 
+The permutation test produced a p-value of approximately 0.003, which is below the significance level of 0.05. 
+Therefore, we reject the null hypothesis and conclude that missingness in the <code>description</code> column is associated with the number of ingredients.
+
+This suggests that the missingness mechanism is more consistent with Missing At Random (MAR), since the probability of missingness appears to depend on an observed variable.
 </p>
         </section>
 
