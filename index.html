@@ -16,9 +16,9 @@
             <li><a href="#eda">EDA</a></li>
             <li><a href="#missingness">Missingness</a></li>
             <li><a href="#hypothesis">Hypothesis</a></li>
-            <li><a href="#prediction">Modeling</a></li>
+            <li><a href="#modeling">Modeling</a></li>
             <li><a href="#baseline-model">Base Model</a></li>
-            <li><a href="#final-model">Optimized Model</a></li>
+            <li><a href="#optimized-model">Optimized Model</a></li>
             <li><a href="#fairness">Fairness</a></li>
             <li><a href="#conclusion">Conclusion</a></li>
         </ul>
@@ -44,17 +44,21 @@
         <section id="introduction" class="section">
             <h2>Introduction</h2>
             <p>
-                Our dataset comes from food.com and consists of two files: a recipes dataset (83, 782 recipes) and an interactions dataset (731, 927 user reviews and ratings). Each recipe includes metadata like cooking time, number of steps, ingredients, tags, and nutritional information. Each interaction is one user reviewing one recipe with a 1-5 star rating and a txt review.
+                This project investigates whether we can predict if a recipe review will receive a five-star rating using review text and recipe-related features.
+                Readers should care about this question because understanding what drives five-star ratings can help recipe creators write better recipes and help recipe platforms identify which content to promote more often.
             </p>
             <p>
                 Our central question is:
-                <strong>Can we predict whether a user will give a recipe a 5-star rating based on their review text and recipe characteristics?</strong>
-                We think it is worth exploring because it could help recipe authors figure out what makes people love their recipes, and it could help food.com recommend better content to users.
+                <strong>How accurately can we predict whether a recipe review submitted by a user will be five stars based on the review text and recipe characteristics?</strong>
             </p>
         </section>
 
         <section id="dataset" class="section">
             <h2>Dataset</h2>
+            <p>
+                Our project uses two datasets: a recipes dataset and an interactions dataset from Foods.com, which contains user reviews and ratings data from 2008 to 2018.
+                These datasets were merged together using a left join on the recipe identifier.
+            </p>
 
             <h3>Relevant Columns</h3>
             <table>
@@ -65,14 +69,14 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr><td>rating</td><td>Star rating from 1-5 (0 means no rating was given)</td></tr>
                     <tr><td>review</td><td>Text written by the user about the recipe</td></tr>
-                    <tr><td>minutes</td><td>Total time required to make the recipe (in minutes)</td></tr>
-                    <tr><td>tags</td><td>food.com tags used to categorize the recipe</td></tr>
+                    <tr><td>rating</td><td>User rating assigned to the recipe</td></tr>
+                    <tr><td>minutes</td><td>Total time required to make the recipe</td></tr>
+                    <tr><td>tags</td><td>Recipe tags used for categorization</td></tr>
+                    <tr><td>ingredients</td><td>List of ingredients used in the recipe</td></tr>
                     <tr><td>n_ingredients</td><td>Number of ingredients in the recipe</td></tr>
-                    <tr><td>n_steps</td><td>Number of steps in the recipe</td></tr>
-                    <tr><td>nutrition</td><td>Nutritional information for the recipe[calories, total_fat, sugar, protein, saturated_fat, carbohydrates]</td></tr>
-                    <tr><td>description</td><td>Recipe description written by the contributor</td></tr>
+                    <tr><td>submitted</td><td>Date the recipe was submitted</td></tr>
+                    <tr><td>avg_rating</td><td>Average rating across users</td></tr>
                 </tbody>
             </table>
         </section>
@@ -82,7 +86,7 @@
 
             <h3>1. Merging the datasets</h3>
             <p>
-                We merged the recipes and interactions datasets using a left join to retain all recipes, even those without review activity. This produced a merged dataset of 234,429 rows.
+                We merged the recipes and interactions datasets using a left join to retain all recipes, even those without review activity.
             </p>
             <pre><code>merged = recipes.merge(
     interactions,
@@ -93,472 +97,885 @@
 
             <h3>2. Replacing 0 ratings with missing values</h3>
             <p>
-                A rating of 0 does not mean zero stars, it means the user interacted but chose not to rate. We replaced all 0 ratings with <code>NaN</code> so they would not drag down averages or distort our analysis.
+                All records where the value in the rating column was 0 were treated as missing and replaced with <code>NaN</code> so that missingness could be studied appropriately.
             </p>
             <pre><code>merged["rating"] = merged["rating"].replace(0, np.nan)</code></pre>
 
-            <h3>3. Computing Average Rating per Recipe</h3>
+            <h3>3. Create Average Rating and merged it into the dataset</h3>
             <p>
-                We computed the mean rating across all reviews for each recipe and merged it back as <code>avg_rating</code>.
+               The average rating column was created , grouped by the rating column and populated as the average rating. This was merged itno the main dataset as a column titled "average rating". 
             </p>
-<pre><code>
-    avg_rating = merged.groupby('id')['rating'].mean().rename('avg_rating')
-    merged = merged.merge(avg_rating, on='id', how='left')
+            <pre><code>
+average_rating = merged.groupby("id")["rating"].mean().rename("average_rating")
+merged = merged.merge(average_rating, on='id', how='left')
 </code></pre>
 
-            <h3>4. Expanding the Nutrition Column</h3>
+            <h3>4. Expanding the nutrition column</h3>
             <p>
-                The nutrition column was stored as a string like <code>'[138.4, 10.0, 50.0, ...]'</code>. We parsed it into an actual list and split it into 7 separate columns: <code>calories</code>, <code>total_fat</code>, <code>sugar</code>, <code>sodium</code>, <code>protein</code>, <code>saturated_fat</code>, and <code>carbohydrates</code>.
+                The nutrition column was converted from a list-like string with seven values for each record into separate usable numeric columns such as
+                <code>calories</code>, <code>total_fat</code>, <code>sugar</code>, <code>sodium</code>, <code>protein</code>, <code>saturated_fat</code>, and <code>carbs</code>.
+                This was done so that nutrition categories could be used for exploratory data analysis and model building.
             </p>
-<pre><code>
-    merged['nutrition'] = merged['nutrition'].apply(
-        lambda s: ast.literal_eval(s) if isinstance(s, str) else s
-    )
+            <pre><code>nutr_cols = ["calories", "total_fat", "sugar", "sodium", "protein", "saturated_fat", "carbs"]
 
-    nutrient_cols = ['calories', 'total_fat', 'sugar', 'sodium', 'protein', 'saturated_fat', 'carbohydrates']
+merged["nutrition"] = merged["nutrition"].apply(
+    lambda s: ast.literal_eval(s) if isinstance(s, str) else s
+)
 
-    def ensure7(x):
-        return x if isinstance(x, list) and len(x) == 7 else [np.nan] * 7
+def ensure7(x):
+    return x if isinstance(x, list) and len(x) == 7 else [np.nan] * 7
 
-    merged[nutrient_cols] = pd.DataFrame(
-        merged['nutrition'].apply(ensure7).tolist(),
-        columns=nutrient_cols,
-        index=merged.index
-    )
-    merged = merged.drop(columns=['nutrition'])
-</code></pre>
-            <h3>Parsing Tags and Ingredients</h3>
+merged[nutr_cols] = pd.DataFrame(
+    merged["nutrition"].apply(ensure7).tolist(),
+    columns=nutr_cols,
+    index=merged.index
+)
+
+merged = merged.drop(columns=["nutrition"], errors="ignore")</code></pre>
+
             <p>
-              The <code>tags</code> and <code>ingredients</code> columns were stored as strings that look like Python lists. We used <code>ast.literal_eval()</code> to convert them into actual lists.  
+                After running the scripts, the dataset looks like this:
             </p>
-<pre><code>
-    merged['tags'] = merged['tags'].apply(
-        lambda x: ast.literal_eval(x) if isinstance(x, str) else x
-    )
-    merged['ingredients'] = merged['ingredients'].apply(
-        lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
-</code></pre>
-            <h3>6. Extracting Meal Type from Tags</h3>
-            <p>After exploring the most common tags, we found meal-related tags like <code>desserts</code>, <code>dinner-party</code>, <code>breakfast</code>, <code>lunch</code>, and <code>snacks</code>. We wrote a function to classify each recipe into a meal category.</p>
-<pre><code>
-    def get_meal_type(tags):
+            <img src="image/new_columns.png"
+                 alt="Expanded nutrition columns from the nutrition list"
+                 class="section-image">
+
+            <h3>5. Creating date-based features</h3>
+            <p>
+                We converted the submitted column into datetime format to accomdate potential usage in EDA.
+            </p>
+            <pre><code>
+import datetime as dt
+merged["submitted"] = pd.to_datetime(merged["submitted"])</code></pre>
+
+           <h3>6. Creating Review Length</h3>
+
+                <p>The column review length was created to define how many characters were utilized by a user to sumbmit a review, has potential usage in EDA and machine learning</p>
+                
+                <pre><code>
+merged['review_length'] = merged['review'].str.len()
+                </code></pre>
+
+        <h3>7. Converting the <code>tags</code> column</h3>
+<p>
+    The <code>tags</code> column originally stored list-like values as strings. 
+    We converted these string representations into actual Python lists so that the tags could be analyzed 
+    and later used in feature engineering for classification models.
+</p>
+
+<pre><code>merged["tags"] = merged["tags"].apply(
+    lambda x: ast.literal_eval(x) if isinstance(x, str) else x
+)</code></pre>
+
+<h3>8. Converting the <code>ingredients</code> column</h3>
+<p>
+    Similarly, the <code>ingredients</code> column contained list-like values stored as strings. 
+    We converted these values into Python lists to enable more flexible analysis and modeling using ingredient-level information.
+</p>
+
+<pre><code>merged["ingredients"] = merged["ingredients"].apply(
+    lambda x: ast.literal_eval(x) if isinstance(x, str) else x
+)</code></pre>
+
+<h3>9. Creating a <code>meal_type</code> feature</h3>
+<p>
+    We created a function to classify each recipe into a general meal category based on its tags. 
+    This produced a new <code>meal_type</code> column with values such as <code>dessert</code>, <code>breakfast</code>, 
+    <code>lunch</code>, <code>dinner</code>, <code>snack</code>, or <code>other</code>. 
+    This feature was useful for exploratory data analysis and subgroup comparisons.
+</p>
+
+<pre><code>def get_meal_type(tags):
     if not isinstance(tags, list):
-        return 'other'
+        return "other"
+
     tags_lower = [t.lower() for t in tags]
-    if any('dessert' in t for t in tags_lower): return 'dessert'
-    if any('breakfast' in t for t in tags_lower): return 'breakfast'
-    if any('lunch' in t for t in tags_lower): return 'lunch'
-    if any('dinner' in t for t in tags_lower): return 'dinner'
-    if any('snack' in t for t in tags_lower): return 'snack'
-    return 'other'
 
-merged['meal_type'] = merged['tags'].apply(get_meal_type)</code></pre>
+    if any("dessert" in t for t in tags_lower):
+        return "dessert"
+    if any("breakfast" in t for t in tags_lower):
+        return "breakfast"
+    if any("lunch" in t for t in tags_lower):
+        return "lunch"
+    if any("dinner" in t for t in tags_lower):
+        return "dinner"
+    if any("snack" in t for t in tags_lower):
+        return "snack"
 
-            <h3>7. Creating Review Length</h3>
-            <p>We computed the character length of each review. This captures how much detail a reviewer wrote.</p>
-<pre><code>
-    merged['review_length'] = merged['review'].str.len()
-</code></pre>
-            
-            <h3>Cleaned Dataset</h3>
-            <p>After all cleaning steps, here is what the first few rows of our dataset look like:</p>
-            
-            <!-- screenshot of merged.head() -->
+    return "other"
+
+merged["meal_type"] = merged["tags"].apply(get_meal_type)
+merged["meal_type"].value_counts()</code></pre>
+
+<img src="image/value_counts.png"
+     alt="Count of meal types"
+     class="section-image">
+
+<h3>10. Creating time-threshold indicators</h3>
+<p>
+    We engineered Boolean indicator variables for recipes that can be prepared within 60, 30, and 15 minutes. 
+    These features allow us to compare shorter recipes with longer ones during both exploratory analysis and modeling.
+</p>
+
+<pre><code>merged["60 Minutes or Less"] = np.where(merged["minutes"] &lt;= 60, True, False).astype(bool)
+merged["30 Minutes or Less"] = np.where(merged["minutes"] &lt;= 30, True, False).astype(bool)
+merged["15 Minutes or Less"] = np.where(merged["minutes"] &lt;= 15, True, False).astype(bool)</code></pre>
 
         </section>
 
         <section id="eda" class="section">
             <h2>Exploratory Data Analysis</h2>
 
-            <h3>Distribution of Ratings</h3>
+            <h3>Distribution Shapes</h3>
             <p>
-               Ratings are heavily left-skewed, most reviews are 4 or 5 stars. 
+                Histograms showed that hours, and review length are right-skewed. This suggests that transformations may be useful in downstream machine learning pipelines to account for the skews in these numeric variables.
             </p>
-<pre><code>
-    fig = px.histogram(merged.dropna(subset=['rating']), x='rating',
-    title='Distribution of Ratings', nbins=5)
-    fig.update_layout(xaxis_title='Rating', yaxis_title='Count')
-    fig.show()
-</code></pre>
-                <!-- ratings histogram -->
 
-            <h3>Distribution of Review Lengths</h3>
-            <p>Review length is right-skewed. Most reviews are short, but there is a long tail of very detailed reviews. </p>
+            <img src="image/recipe_ratings.png"
+                 alt="Distribution of recipe ratings from 0 to 5"
+                 class="section-image">
 
-             <!-- review lengths visual -->
-           
-            <h3>Review Length by Rating</h3>
-            <p>Lower-rated reviews tend to be longer, which tells us that unhappy users are more likely to explain what went wrong. 5-star reviews are often short.</p>
-             <!-- box plot -->
+            <img src="image/review_length.png"
+                 alt="Distribution of total review length (in characters)"
+                 class="section-image">
 
-            <h3>Cooking Time vs Rating</h3>
-            <p>No clear relationship between cooking time and rating. Recipes of all lengths get the full range of ratings.</p>
-                 <!-- scatterplot -->
-
-            <h3>Grouping Recipes by Ingredient Count</h3>
+                <h3>Review Length by Rating</h3>
             <p>
-                Ratings stayed around 4.7 no matter the ingredient count, which told us that knowing how many ingredients a recipe has won't alone help us predict whether someone gives it 5 stars.
+               There is a trend that reviews of five stars tend to have more characters. Shorter reviews generally have less characters and longer reviews have more characters. 
             </p>
-<pre><code>
-    merged['ingredient_group'] = pd.cut(
-    merged['n_ingredients'], bins=[0, 5, 10, 15, 20, 50],
-    labels=['1-5', '6-10', '11-15', '16-20', '21+']
+            <img src="image/boxplot.png"
+                 alt="Distribution of review length by rating"
+                 class="section-image">
+
+            <h3>Scatterplot of Cooking Time and Rating</h3>
+            <p>
+               Here is the relationship between cooking time (minutes) and the rating (0-5) stars
+            </p>
+            <img src="image/scatterplot.png"
+                 alt="Scatterplot of cooking times in minutes as well as rating"
+                 class="section-image">
+
+            <h3>Meal Type Counts</h3>
+            <p>
+                Dessert was the most common meal type represented in the dataset after excluding recipes labeled as "other".
+            </p>
+            <img src="image/meal_types.png"
+                 alt="Count of recipes by meal type"
+                 class="section-image">
+
+            <h3>Ingredient Groups</h3>
+            <p>
+              Listed here is the average rating, cooking time in minutes, number of steps and review length of recipes by the respective bins of total amount of ingreidents.
+
+            </p>
+            <img src="image/bin_list.png"
+                 alt="Bin List of Ingredients by Summary Statistics"
+                 class="section-image">   
+
+
+            <h3>Cooking Time by Meal Type</h3>
+            <p>
+                Box plots indicated that desserts and dinners generally take the longest to prepare, while lunch and snack recipes take the least time.
+            </p>
+            <img src="image/meal_time_boxplot.png"
+                 alt="Boxplot of cooking time by meal type"
+                 class="section-image">
+
+            <h3>Average Rating by Meal Type</h3>
+            <p>
+                The following code computes the mean ratings by meal type. Mean ratings were high across all meal types, generally at or above 4.6,
+                suggesting that the dataset is skewed toward favorable reviews.
+            </p>
+            <pre><code>
+food_group_ratings = (
+    merged.pivot_table(
+        index="meal_type",
+        values="rating",
+        aggfunc="mean"
     )
+    .rename(columns={"rating": "Average Rating"})
+    .sort_values(by="Average Rating", ascending=False)
+)
 
-    (merged
-    .groupby('ingredient_group', observed=True)
-    [['rating', 'minutes', 'n_steps', 'review_length']]
-    .mean()
-    .round(2)
-    )
-</code></pre>
-        <!--table-->
-            
-            <h3>Recipe Modification Analysis</h3>
-            <p>When we looked at the most common words in reviews, "added" and "instead" appeared in 39,255 and 20,339 reviews. So we checked for other modification-related words like "substituted", "replaced", "swapped", and "omitted" and found that they show up pretty often too. Reviewers who modify recipes tend to write longer reviews but give similar ratings to non-modifiers. We turned this into a feature called <code>is_modifier</code> for our model.</p>
-<pre><code>
-    modification_words = [
-    'substituted', 'replaced', 'swapped', 'switched',
-    'added', 'omitted', 'left out', 'instead of', 'modified',
-    'adjusted', 'changed', 'tweaked', 'doubled', 'halved',
-    'reduced', 'increased'
-    ]
-
-    def has_modification(text):
-        if not isinstance(text, str):
-            return False
-        text_lower = text.lower()
-        return any(word in text_lower for word in modification_words)
-
-    merged['is_modifier'] = merged['review'].apply(has_modification)
+food_group_ratings
 </code></pre>
 
-        <!--Modifier histogram-->
+            <img src="image/average_rating.png"
+                 alt="Average rating by meal type"
+                 class="section-image">
+
+           <h3>Average Rating by Number of Steps</h3>
+            <p>
+                The following code computes the average number of steps by meal type. The dinner and desset meal type have the highest average number of meal types taken. 
+            </p>
+            <pre><code>food_group_ratings = (
+food_group_steps = merged.pivot_table(
+    index="meal_type",
+    values="n_steps",
+    aggfunc="mean"
+)
+
+food_group_steps.sort_values(by="n_steps", ascending=True, inplace=True)
+food_group_steps = food_group_steps.rename(columns={"n_steps": "Average Number of Steps Taken"}).round(1)
+food_group_steps
+)</code></pre>
+
+            <img src="image/average_rating.png"
+                 alt="Average rating by meal type"
+                 class="section-image">
         </section>
 
         <section id="missingness" class="section">
             <h2>Assessment of Missingness</h2>
 
-            <h3>NMAR Analysis</h3>
+            <h3>Rating Missingness</h3>
             <p>
-                We believe the <code>rating</code> column is <strong>NMAR</strong> (Not Missing At Random). The missingness is likely tied to the rating value itself, where users who felt indifferent are less likely to leave a rating, while users with strong opinions are more motivated to rate.
-            </p>
-            <p>
-               To make this <strong>MAR</strong>, we would need additional data on user engagement — for example, time spent on the recipe page or the user's rating history. 
+               We investigated whether the missingness in the description column is related to the number of ingreidents and number of steps columns. If the missingness depends on the observed variables, then the missingness mechanism would be consistent with Missing At Random (MAR) rather than Missing Completely At Random (MCAR).
             </p>
 
 
-            <h3>Missingness Dependency Tests</h3>
+            <h3>Permutation Test 1</h3>
             <p>
-                We tested whether the missingness of the <code>description</code> column depends on other columns.
-<pre><code>
-    merged['desc_missing'] = merged['description'].isna()
-    print(f'missing descriptions: {merged["desc_missing"].sum()}')
-</code></pre>
-
-            <h4>Test 1: Description Missingness -- Number of Ingredients</h4>
-            <p>We compared what the distribution of <code>n_ingredients</code> looks like for recipes that have descriptions vs recipes that don't.</p>
+                We tested whether descrpition missingness was associated with <code>Number of Steps</code>.
                 
-               <!--Add KDE PLOT-->
-            
-            <p>The distributions looked different, so we ran a permutation test to check if the difference was statistically significant. We shuffled the missingness labels 1000 times and compared the difference in means each time to what we actually observed.</p>
+                <p><strong>Null Hypothesis:</strong> The missingness in the <code>description</code> column is independent of the number of steps.</p>
+                <p><strong>Alternative Hypothesis:</strong> The missingness in the <code>description</code> column depends on the number of steps.</p>
 
 <pre><code>
-    observed_stat = merged.groupby('desc_missing')['n_ingredients'].mean().diff().iloc[-1]
-    print(f'Observed difference: {observed_stat:.4f}')
+merged['desc_missing'] = merged['description'].isna()
+print(f'missing descriptions: {merged["desc_missing"].sum()}')
 
-    n_reps = 1000
-    shuffled_stats = []
-    for _ in range(n_reps):
-        shuffled = np.random.permutation(merged['desc_missing'])
-        diff = merged.assign(desc_missing=shuffled).groupby('desc_missing')['n_ingredients'].mean().diff().iloc[-1]
-        shuffled_stats.append(diff)
+test_df1 = merged[["desc_missing", "n_steps"]].dropna()
 
-    p_value = np.mean(np.abs(shuffled_stats) >= np.abs(observed_stat))
-    print(f'p-value: {p_value}')
-</code></pre>
-            <p>
-                The observed difference in means was -1.1335 and the p-value was 0.001. Since p &lt; 0.05, we reject the null hypothesis, meaning that description missingness <strong>does depend on</strong> <code>n_ingredients</code>. Recipes with fewer ingredients are more likely to skip the description.
-            </p>
-            <!--Permuatation test plot-->
+observed_stat = (
+    test_df1.groupby("desc_missing")["n_steps"]
+    .mean()
+    .diff()
+    .iloc[-1]
+)
+print(f"Observed difference: {observed_stat:.4f}")
 
-            <h4>Test 2: Description Missingess -- Minutes</h4>
-            <p>We ran the same test but with <code>minutes</code> instead of <code>n_ingredients</code> to see if cooking time has anything to do with whether a recipe has a description.</p>
+n_reps = 1000
+shuffled_stats = []
 
-<pre><code>
-    observed_stat_min = merged.groupby('desc_missing')['minutes'].mean().diff().iloc[-1]
-    print(f'Observed difference: {observed_stat_min:.4f}')
+for _ in range(n_reps):
+    shuffled = np.random.permutation(test_df1["desc_missing"])
+    diff = (
+        test_df1.assign(desc_missing=shuffled)
+        .groupby("desc_missing")["n_steps"]
+        .mean()
+        .diff()
+        .iloc[-1]
+    )
+    shuffled_stats.append(diff)
 
-    n_reps = 1000
-    shuffled_stats_min = []
-    for _ in range(n_reps):
-        shuffled = np.random.permutation(merged['desc_missing'])
-        diff = merged.assign(desc_missing=shuffled).groupby('desc_missing')['minutes'].mean().diff().iloc[-1]
-        shuffled_stats_min.append(diff)
+p_value = np.mean(np.abs(shuffled_stats) >= np.abs(observed_stat))
+print(f"p-value: {p_value:.3f}")
 
-    p_value_min = np.mean(np.abs(shuffled_stats_min) >= np.abs(observed_stat_min))
-    print(f'p-value: {p_value_min}')    
-</code></pre>
+    </code></pre>
 
-            <p>
-                The observed difference was -42.28 and the p-value was about 0.47. Since p &gt; 0.05, we fail to reject the null, meaning that description missingness <strong>does not depend on</strong> <code>minutes</code>. Whether a recipe has a description has nothing to do with how long it takes to cook.
-            </p>
-            
-            <!-- plot for test 2--->
+<p>The observed difference in the mean number of steps between recipes with missing and non-missing ratings was 0.7194. The permutation test produced a p-value of approximately 0.229, which is above the significance level of 0.05. Therefore, we fail to reject the null hypothesis that description missingness is independent of the number of steps. This suggests that the probability of a description being missing is not contingent on the number of steps displayed in the recipe. The missingness mechanism is Missing Completely At Random (MCAR)..</p>
 
+<img src="image/permutation_1.png"
+alt="Permutation Distribution for Description Missingness Test"
+    class="section-image">
+
+    <h3>Permutation Test 2</h3>
+<p>
+    We tested whether missingness in the <code>description</code> column was associated with 
+    <code>Number of Ingredients</code>.
+</p>
+<p><strong>Null Hypothesis:</strong> Missingness in the <code>description</code> column is independent of the number of ingredients.</p>
+<p><strong>Alternative Hypothesis:</strong> Missingness in the <code>description</code> column depends on the number of ingredients.</p>
+
+<pre><code>merged["desc_missing"] = merged["description"].isna()
+print(f'missing descriptions: {merged["desc_missing"].sum()}')
+
+def create_kde_plotly(df, group_col, group1, group2, vals_col, title=""):
+    fig = ff.create_distplot(
+        hist_data=[
+            df.loc[df[group_col] == group1, vals_col].dropna(),
+            df.loc[df[group_col] == group2, vals_col].dropna()
+        ],
+        group_labels=[str(group1), str(group2)],
+        show_rug=False,
+        show_hist=False,
+    )
+    return fig.update_layout(title=title)
+
+fig = create_kde_plotly(
+    merged,
+    "desc_missing",
+    True,
+    False,
+    "n_ingredients",
+    title="Distribution of Number of Ingredients by Description Missingness"
+)
+fig.data[0].name = "Description Missing"
+fig.data[1].name = "Description Not Missing"
+fig.show()
+
+observed_stat = (
+    merged.groupby("desc_missing")["n_ingredients"]
+    .mean()
+    .diff()
+    .iloc[-1]
+)
+print(f"Observed difference: {observed_stat:.4f}")
+
+n_reps = 1000
+shuffled_stats = []
+
+for _ in range(n_reps):
+    shuffled = np.random.permutation(merged["desc_missing"])
+    diff = (
+        merged.assign(desc_missing=shuffled)
+        .groupby("desc_missing")["n_ingredients"]
+        .mean()
+        .diff()
+        .iloc[-1]
+    )
+    shuffled_stats.append(diff)
+
+p_value = np.mean(np.abs(shuffled_stats) >= np.abs(observed_stat))
+print(f"p-value: {p_value:.4f}")</code></pre>
+
+<img src="image/kde_plot.png"
+     alt="KDE plot of number of ingredients by description missingness"
+     class="section-image">
+
+<img src="image/permutation_2.png"
+     alt="Permutation test for description missingness and number of ingredients"
+     class="section-image">
+
+<p>
+    The observed difference in the mean number of ingredients between recipes with missing and non-missing descriptions was -1.1335. 
+    The permutation test produced a p-value of approximately 0.003, which is below the significance level of 0.05. 
+    Therefore, we reject the null hypothesis and conclude that missingness in the <code>description</code> column is associated with the number of ingredients. 
+    This suggests that description missingness is more consistent with <strong>Missing At Random (MAR)</strong> than <strong>Missing Completely At Random (MCAR)</strong>.
+</p>
         </section>
 
         <section id="hypothesis" class="section">
-            <h2>Hypothesis Testing</h2>
+            <h2>Hypothesis Test</h2>
 
             <p>
-                We tested whether quick recipes (30 minutes or less) receive different average ratings than longer recipes.
+                We test whether recipes that take 30 minutes or less differ in average rating from recipes that take more than 30 minutes..
             </p>
 
-            <h3>Null Hypothesis</h3>
-            <p>
-                The average rating of quick recipes and longer recipes are the same.
-            </p>
+            <h3>Null hypothesis (H₀):</h3>
+<p>Quick recipes and longer recipes have the same mean rating.</p>
 
-            <h3>Alternative Hypothesis</h3>
-            <p>
-                The average rating of quick recipes and longer recipes are different.
-            </p>
+<h3>Alternative hypothesis (H₁):</h3>
+<p>Quick recipes and longer recipes have different mean ratings.</p>
 
-            <h3>Test Setup</h3>
-            <p>
-                We used the <strong>absolute difference in mean rating</strong> as our test statistic because we care about whether the two groups differ at all, not which direction. We set <strong>&alpha; = 0.05</strong> and performed a permutation test by shuffling the quick/longer labels 1000 times.
-            </p>
-<pre><code>
-    rated = merged.dropna(subset=['rating']).copy()
-    rated['is_quick'] = rated['minutes'] &lt;= 30
+<h3>Test statistic:</h3>
+The absolute difference in mean rating between the two groups.
 
-    group_means = rated.groupby('is_quick')['rating'].mean()
-    observed_diff = abs(group_means[True] - group_means[False])
+            <h3>Test Used</h3>
+            <p>We used a permutation test to assess whether there was a difference in group means between shorter and longer recipes</p>
+            <pre><code>
+merged['minutes'].describe().round(0).astype(int)
 
-    n_reps = 1000
-    perm_diffs = []
-    for _ in range(n_reps):
-        shuffled_labels = np.random.permutation(rated['is_quick'])
-        means = rated.assign(is_quick=shuffled_labels).groupby('is_quick')['rating'].mean()
-        perm_diffs.append(abs(means[True] - means[False]))
+rated = merged.dropna(subset=['rating']).copy()
 
-    p_value = np.mean(np.array(perm_diffs) >= observed_diff)
-</code></pre>
+rated['is_quick'] = rated['minutes'] <= 30
 
-            <img src="image/scatterplot.png"
-                 alt="Scatterplot of cooking time in hours and recipe ratings"
+group_means = rated.groupby('is_quick')['rating'].mean()
+observed_diff = abs(group_means[True] - group_means[False])
+print(f'Mean rating (quick): {group_means[True]:.4f}')
+print(f'Mean rating (longer): {group_means[False]:.4f}')
+print(f'Observed abs difference: {observed_diff:.4f}')
+
+n_reps = 1000
+perm_diffs = []
+for _ in range(n_reps):
+    shuffled_labels = np.random.permutation(rated['is_quick'])
+    means = rated.assign(is_quick=shuffled_labels).groupby('is_quick')['rating'].mean()
+    perm_diffs.append(abs(means[True] - means[False]))
+
+p_value = np.mean(np.array(perm_diffs) >= observed_diff)
+print(f'p-value: {p_value}')
+
+p-value: 0.0</code></pre>
+
+            <img src="image/quick_longer.png"
+                 alt="Permutation Test Histogram of Quick vs Longer Recipe Ratings"
                  class="section-image">
 
-            <h3>Results</h3>
+
+
             <p>
-               Quick recipes had an average rating of 4.6985 and longer recipes had 4.6638, so the observed difference was only about 0.035. At a significance level of 0.05, we got a p-value of 0.0, so we reject the null hypothesis. Cooking time and ratings are not independent.
+               The permutation test produced a p-value less than 0.001, so we reject the null hypothesis that quick recipes and longer recipes have the same mean rating. This suggests that recipe rating is associated with whether a recipe takes 30 minutes or less. However, the observed difference in mean rating is very small: quick recipes have an average rating of **4.6985**, while longer recipes have an average rating of **4.6638**, for a difference of only about **0.0347** points. So although the result is statistically significant, the effect appears to be practically negligible. 
             </p>
+
         </section>
 
-        <section id="prediction" class="section">
+        <section id="modeling" class="section">
             <h2>Framing a Prediction Problem</h2>
             <p>
-                We frame this as a <strong>binary classification</strong> problem: predict whether a review gives a <strong>5-star rating</strong> (<code>is_five_star = 1</code>) or not (<code>is_five_star=0</code>).
+                Our prediction problem is to determine whether a recipe review will receive a five-star rating. We define the response variable as `is_five_star`, which equals 1 when rating = 5, and 0 otherwise. Because the target has two possible outcomes, this is a **binary classification** problem.
+
+We use **F1-score** as our primary evaluation metric. The classes are not perfectly balanced, so accuracy alone could be misleading. F1-score is more appropriate because it balances precision and recall and gives a better sense of how well the model identifies five-star reviews without overpredicting them.
+
+At the time of prediction, we assume that the written review text and selected recipe-level features are available, but the numerical rating is not. Under this framing, the model predicts whether a given review corresponds to a five-star rating based on the content of the review and the associated recipe characteristics.
             </p>
-<pre><code>
-    model_df = merged.dropna(subset=['rating', 'review']).copy()
-    model_df['is_five_star'] = (model_df['rating'] == 5).astype(int)
+
+            <pre><code>
+model_df = merged.dropna(subset=['rating', 'review']).copy()
+
+model_df['is_five_star'] = (model_df['rating'] == 5).astype(int)
+
+print(model_df['is_five_star'].value_counts(normalize=True).round(3))
+print(f'\nrows: {model_df.shape[0]}')
 </code></pre>
-            <h3>Response Variable</h3>
-            <p>We're predicting <code>is_five_star</code>, which is 1 if the rating is exactly 5 and 0 otherwise. We chose this because 5 stars represents the strongest level of satisfaction, and it gives us a cleaner question than trying to predict the exact 1-5 rating.</p>
+<img src="image/five_star_imbalance.png"
+alt="Class Imbalance"
+class="section-image">
 
-            <h3>Evaluation Metric</h3>
-            <p>We use <strong>F1-score</strong> instead of accuracy because about 77% of reviews are 5 stars. A model that just predicts 5 stars every time would get 77% accuracy without learning anything useful. F1 balances precision and recall, so it actually measures whether the model is doing something meaningful.</p>
+            <pre><code>
+# FEATURE ENGINEERING
+# exclamation marks: enthusiastic reviewers use lots of !'s
+model_df['exclamation_count'] = model_df['review'].str.count('!')
 
-            <h3>Features at Time of Prediction</h3>
-            <p>We assume the review text has already been written and we want to infer the star rating. This makes sense for cases where a platform receives text reviews without structured ratings. We do not use the numeric rating as a feature since that is what we are trying to predict.</p>
+# word count: how many words in the review
+model_df['word_count'] = model_df['review'].str.split().str.len()
+
+# is_modifier: did the reviewer mention changing the recipe? (from our EDA)
+model_df['is_modifier'] = model_df['review'].apply(has_modification).astype(int)
+
+# steps per ingredient: ratio to show complexy of a recipe
+# 10 steps with 3 ingredients is very different from 10 steps with 20
+model_df['steps_per_ingredient'] = model_df['n_steps'] / model_df['n_ingredients'].replace(0, 1)
+
+# simple sentiment score using the words we found above
+# count positive words minus negative words
+positive_words = ['loved', 'great', 'amazing', 'delicious', 'perfect',
+                  'excellent', 'wonderful', 'best', 'favorite', 'fantastic', 'awesome']
+negative_words = ['bland', 'terrible', 'awful', 'bad', 'disappointed',
+                  'dry', 'gross', 'worst', 'tasteless', 'horrible', 'disgusting']
+
+def count_words(text, word_list):
+    if not isinstance(text, str): return 0
+    text_lower = text.lower()
+    return sum(text_lower.count(w) for w in word_list)
+
+model_df['sentiment'] = (
+    model_df['review'].apply(lambda x: count_words(x, positive_words))
+    - model_df['review'].apply(lambda x: count_words(x, negative_words))
+)
+model_df[['exclamation_count', 'word_count', 'is_modifier', 'steps_per_ingredient', 'sentiment']].describe()
+</code></pre>
+<img src="image/summary_stats.png"
+alt="Sumamry Statistics for Exclamation_Count, Word_Count, Is_modifier, Steps_Per_ingredient and sentiment columns"
+class="section-image">
+
+
+
         </section>
 
         <section id="baseline-model" class="section">
-            <h2>Baseline Model</h2>
+            <h2>Base Machine Learning Model</h2>
 
-            <h3>Features</h3>
-            <p>Our baseline uses <strong>5 quantitative features</strong> (<code>n_steps</code>, <code>n_ingredients</code>, <code>minutes</code>, <code>calories</code>, <code>review_length</code>) and <strong>1 nominal feature</strong> (<code>meal_type</code>). No ordinal features.</p>
+            <p>
+                In this section, we construct a baseline model for our prediction task: determining whether a recipe review receives a five-star rating. This baseline serves as a simple reference point that uses a small set of features within a single sklearn pipeline. Its performance will help us judge whether later feature engineering and model tuning meaningfully improve prediction quality.
+            </p>
+
+            <h3>Target Variable</h3>
+            <p>
+                The response variable for our classification task is the is_five_star column that was created as part of the EDA process.
+            </p>
+
+ 
+
+            <h3>Features Used</h3>
+            <p>
+                In the baseline model, we used structured numeric recipe-related features that were available after cleaning the dataset.
+                These included variables such as review_length, calories, Number of Steps, Number of Ingredients and Total Minutes.
+                We selected these features because they are interpretable and provide a simple foundation for prediction.
+            </p>
+
 <pre><code>
-    baseline_num = ['n_steps', 'n_ingredients', 'minutes', 'calories', 'review_length']
-    baseline_cat = ['meal_type']</code></pre>
+feature_cols = [
+    "review_length",
+    "calories",
+    "Number of Steps",
+    "Number of Ingredients",
+    "Total Minutes"
+]    
+</code></pre>
+
+            <h3>Baseline Category</h3>
+            <p>
+                We will use the column meal_type as a feature in the model, which will be one hot encoded to account for all six different meal types. 
+            </p>
+
+<pre><code>
+baseline_cat = ["meal_type"]   
+</code></pre>
+
+            <h3>Model Choice</h3>
+            <p>
+                We used a logistic regression classifier as our baseline model because it is efficient, interpretable,
+                and well-suited for binary classification tasks.
+                Logistic regression also provides a strong benchmark for evaluating whether more complex models meaningfully improve predictive performance.
+            </p>
 
             <h3>Pipeline</h3>
-            <p>Quantitative features are standardized with <code>StandardScaler</code>. The nominal feature is one-hot encoded with <code>OneHotEncoder(drop='first')</code>. All in a single sklearn Pipeline.</p>
+            <p>
+                Our baseline pipeline included preprocessing steps for both numeric and categorical variables.
+                Numeric columns were imputed and scaled, while categorical columns were one-hot encoded.
+                This ensured that the model could handle mixed data types appropriately. The following represents the process required to 
+            </p>
 
+            <pre><code>
 
-<pre><code>baseline_preproc = ColumnTransformer(transformers=[
-    ('num', StandardScaler(), baseline_num),
+all_cols = feature_cols + baseline_cat + [
+    "review", "exclamation_count", "word_count", "is_modifier", "steps_per_ingredient", "sentiment"
+]
+
+X = model_df[all_cols].copy()
+y = model_df['is_five_star']
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+print(f'train: {X_train.shape[0]}, test: {X_test.shape[0]}')
+
+baseline_preproc = ColumnTransformer(transformers=[
+    ('num', StandardScaler(), feature_cols),
     ('cat', OneHotEncoder(drop='first', handle_unknown='ignore'), baseline_cat),
 ])
 
-baseline_pl = make_pipeline(
-    baseline_preproc,
-    LogisticRegression(max_iter=1000, class_weight='balanced')
-)
+baseline_pl = make_pipeline(baseline_preproc, LogisticRegression(max_iter=1000, class_weight='balanced'))
+
 baseline_pl.fit(X_train, y_train)
+
+baseline_pred = baseline_pl.predict(X_test)
+
 </code></pre>
 
 
             <h3>Evaluation</h3>
             <p>
-                We evaluated the model on a held-out test set using an 80/20 stratified split. The baseline achieved an <strong>F1-score of 0.6630</strong> and accuracy of 0.5503. Precision was 0.79 but recall only 0.57, which means the model misses 43% of true 5-star reviews. We don't consider this a good model, which is why we needed to add more features to improve performance.
+               The baseline Logistic Regression model achieves an F1-score of 0.6630 on the test set. This gives us a useful starting benchmark for the prediction task. While the baseline performs reasonably well at identifying five-star reviews, its overall performance leaves room for improvement through additional feature engineering and model tuning in the next section.
             </p>
+<pre><code>
+print(classification_report(y_test, baseline_pred))
+print(f'F1: {f1_score(y_test, baseline_pred):.4f}')
+</code></pre>
 
-    <img src="image/confusion_matrix.png"
-    alt="Confusion Matrix of Base Logistic Regression Model"
-    class="section-image">
+<img src="image/confusion_matrix_1.png"
+alt="Confusion Matrix of Base Logistic Regression Model"
+class="section-image">
+
+<pre><code>
+ConfusionMatrixDisplay.from_estimator(baseline_pl, X_test, y_test, cmap='Blues')
+plt.title('Baseline Confusion Matrix')
+plt.grid(False)
+plt.show()
+</code></pre>
+
+<img src="image/confusion_matrix_2.png"
+alt="Confusion Matrix of Base Logistic Regression Model"
+class="section-image">
+
         </section>
 
-        <section id="final-model" class="section">
-            <h2>Final Model</h2>
+        <section id="optimized-model" class="section">
+ <h2>Final Machine Learning Model</h2>
 
-            <h3>Engineered Features</h3>
-            <p>We added 5 new features, each justified by the data generating process:</p>
-            <ul>
-                <li><strong>exclamation_count</strong>: Number of "!" in the review. People who love a recipe tend to express excitement with punctuation like "SO GOOD!!!", so this captures enthusiasm that plain word counts miss.</li>
-                <li><strong>word_count</strong>: Number of words in the review. Our EDA showed that lower-rated reviews tend to be longer because unhappy users explain what went wrong, so review length is a signal of satisfaction.</li>
-                <li><strong>sentiment</strong>: Count of positive words minus negative words. We built this from our word frequency analysis that showed words like "loved" and "amazing" are heavily overrepresented in 5-star reviews while words like "bland" and "disappointed" appear more in lower-rated ones.</li>
-                <li><strong>is_modifier</strong>: Whether the reviewer mentioned changing the recipe. We discovered this pattern in our EDA — about 26% of reviews mention modifications, and these reviewers interact with recipes differently.</li>
-                <li><strong>steps_per_ingredient</strong>: Ratio of steps to ingredients. A recipe with 10 steps and 3 ingredients is much more technique-heavy than one with 10 steps and 20 ingredients, and this complexity may affect how people rate it.</li>
-            </ul>
+<p>
+    In this section, we develop our final model for predicting whether a review assigns a recipe a five-star rating. 
+    Building on the baseline feature set, we introduce additional engineered features and TF-IDF representations of review text 
+    to capture richer signals from both recipe structure and review language. We then compare several classification algorithms 
+    and use <code>GridSearchCV</code> to tune the model that performs best on our evaluation metric.
+</p>
 
+<p>
+    The engineered features in the final model are designed to capture both review sentiment and recipe complexity:
+</p>
 
+<ul>
+    <li><code>exclamation_count</code> captures enthusiasm or excitement in the review text.</li>
+    <li><code>word_count</code> measures how detailed the review is.</li>
+    <li><code>sentiment</code> reflects the overall positive or negative tone of the review.</li>
+    <li><code>is_modifier</code> indicates whether the reviewer appears to have changed or adapted the recipe.</li>
+    <li><code>steps_per_ingredient</code> provides a rough measure of recipe complexity by comparing the number of steps to the number of ingredients.</li>
+</ul>
 
-<pre><code>
-    model_df['exclamation_count'] = model_df['review'].str.count('!')
-    model_df['word_count'] = model_df['review'].str.split().str.len()
-    model_df['is_modifier'] = model_df['review'].apply(has_modification).astype(int)
-    model_df['steps_per_ingredient'] = model_df['n_steps'] / model_df['n_ingredients'].replace(0, 1)
+<h3>Numeric Features</h3>
+<p>
+    The following numeric features were included in the final model:
+</p>
 
-    positive_words = ['loved', 'great', 'amazing', 'delicious', 'perfect',
-                  'excellent', 'wonderful', 'best', 'favorite', 'fantastic', 'awesome']
-    negative_words = ['bland', 'terrible', 'awful', 'bad', 'disappointed',
-                  'dry', 'gross', 'worst', 'tasteless', 'horrible', 'disgusting']
+<pre><code>num_final = [
+    "n_steps",
+    "n_ingredients",
+    "minutes",
+    "calories",
+    "review_length",
+    "exclamation_count",
+    "word_count",
+    "sentiment",
+    "is_modifier",
+    "steps_per_ingredient"
+]</code></pre>
 
-    model_df['sentiment'] = (
-        model_df['review'].apply(lambda x: count_words(x, positive_words))
-        - model_df['review'].apply(lambda x: count_words(x, negative_words))
-    )
+<h3>Preprocessing Pipeline</h3>
+<p>
+    We built a preprocessing pipeline that combines standardized numeric inputs, sparse TF-IDF text features, 
+    and one-hot encoded categorical features. Numeric variables were scaled using <code>StandardScaler</code>, 
+    review text was transformed using <code>TfidfVectorizer</code>, and <code>meal_type</code> was one-hot encoded.
+</p>
 
-</code></pre>
-                
-            <p>We also added <strong>TF-IDF text features</strong> from the review via <code>TfidfVectorizer</code>.</p>
-
-            <h3>Trying Multiple Algorithms</h3>
-            <p>We compared four algorithms using 5-fold cross-validation:</p>
-
-<pre><code>
-preproc = ColumnTransformer(transformers=[
-    ('num', StandardScaler(), num_final),
-    ('text', TfidfVectorizer(max_features=5000, ngram_range=(1, 2)), 'review'),
-    ('cat', OneHotEncoder(drop='first', handle_unknown='ignore'), ['meal_type']),
+<pre><code>preproc = ColumnTransformer(transformers=[
+    ("num", StandardScaler(), num_final),
+    ("text", TfidfVectorizer(max_features=5000, ngram_range=(1, 2)), "review"),
+    ("cat", OneHotEncoder(drop="first", handle_unknown="ignore"), ["meal_type"]),
 ])
-</code></pre>
-            <table>
-                <thead><tr><th>Model</th><th>Mean CV F1</th></tr></thead>
-                <tbody>
-                    <tr><td>LogisticRegression</td><td>0.9116</td></tr>
-                    <tr><td>LinearSVC</td><td>0.9105</td></tr>
-                    <tr><td>MultinomialNB</td><td>0.9013</td></tr>
-                    <tr><td>RandomForestClassifier</td><td>0.8829</td></tr>
-                </tbody>
-            </table>
-            <p>We selected <strong>LogisticRegression</strong> as our final model.</p>
 
-            <h3>Hyperparameter Tuning</h3>
-            <p>
-                We used <code>GridSearchCV</code> with 5-fold CV to tune three hyperparameters:
-            </p>
-            <ul>
-                <li><strong>C</strong> (0.1, 0.5, 1.0): Regularization strength.</li>
-                <li><strong>max_features</strong> (3000, 5000): TF-IDF vocabulary size.</li>
-                <li><strong>ngram_range</strong> ((1,1) vs. (1,2)): Unigrams only vs unigrams + bigrams.</li>
-            </ul>
+# Separate preprocessor for Naive Bayes (requires non-negative inputs)
+preproc_nb = ColumnTransformer(transformers=[
+    ("num", MinMaxScaler(), num_final),
+    ("text", TfidfVectorizer(max_features=5000, ngram_range=(1, 2)), "review"),
+    ("cat", OneHotEncoder(drop="first", handle_unknown="ignore"), ["meal_type"]),
+])</code></pre>
 
-<pre><code>params = {
-    'columntransformer__text__max_features': [3000, 5000],
-    'columntransformer__text__ngram_range': [(1, 1), (1, 2)],
-    'logisticregression__C': [0.1, 0.5, 1.0],
+<h3>Model Comparison</h3>
+<p>
+    We evaluated four candidate models using 5-fold cross-validated F1-score: Logistic Regression, Random Forest, Linear SVC, and Multinomial Naive Bayes.
+</p>
+
+<h4>Model 1: Logistic Regression</h4>
+<pre><code>lr_pl = make_pipeline(preproc, LogisticRegression(max_iter=1000))
+lr_scores = cross_val_score(lr_pl, X_train, y_train, cv=5, scoring="f1", n_jobs=-1)
+print(f"mean F1 = {lr_scores.mean():.4f} (std = {lr_scores.std():.4f})")</code></pre>
+
+<h4>Model 2: Random Forest</h4>
+<pre><code>rf_pl = make_pipeline(
+    preproc,
+    RandomForestClassifier(n_estimators=100, max_depth=20, random_state=42)
+)
+rf_scores = cross_val_score(rf_pl, X_train, y_train, cv=5, scoring="f1", n_jobs=-1)
+print(f"mean F1 = {rf_scores.mean():.4f} (std = {rf_scores.std():.4f})")</code></pre>
+
+<h4>Model 3: Linear SVC</h4>
+<pre><code>svc_pl = make_pipeline(preproc, LinearSVC(max_iter=2000))
+svc_scores = cross_val_score(svc_pl, X_train, y_train, cv=5, scoring="f1", n_jobs=-1)
+print(f"mean F1 = {svc_scores.mean():.4f} (std = {svc_scores.std():.4f})")</code></pre>
+
+<h4>Model 4: Multinomial Naive Bayes</h4>
+<pre><code>nb_pl = make_pipeline(preproc_nb, MultinomialNB())
+nb_scores = cross_val_score(nb_pl, X_train, y_train, cv=5, scoring="f1", n_jobs=-1)
+print(f"mean F1 = {nb_scores.mean():.4f} (std = {nb_scores.std():.4f})")</code></pre>
+
+<p>
+    The models ranked from best to worst by mean cross-validated F1-score were:
+</p>
+
+<ul>
+    <li>Logistic Regression: <strong>0.9115</strong></li>
+    <li>Linear SVC: <strong>0.9105</strong></li>
+    <li>Multinomial Naive Bayes: <strong>0.9013</strong></li>
+    <li>Random Forest: <strong>0.8829</strong></li>
+</ul>
+
+<p>
+    Among the four candidate models, <strong>Logistic Regression</strong> achieved the highest mean cross-validated F1-score. 
+    Because it performed best while remaining interpretable and well-suited to sparse TF-IDF features, we selected it for further tuning with <code>GridSearchCV</code>.
+</p>
+
+<h3>Hyperparameter Tuning</h3>
+<p>
+    We tuned the final Logistic Regression model by varying the following hyperparameters:
+</p>
+
+<ul>
+    <li><code>C</code>, which controls the strength of regularization, using values 0.1, 0.5, and 1.0.</li>
+    <li><code>max_features</code>, which controls the size of the TF-IDF vocabulary, using values 3000 and 5000.</li>
+    <li><code>ngram_range</code>, which compares unigrams only against unigrams plus bigrams.</li>
+</ul>
+
+<pre><code>preproc_gs = ColumnTransformer(transformers=[
+    ("num", StandardScaler(), num_final),
+    ("text", TfidfVectorizer(max_features=5000), "review"),
+    ("cat", OneHotEncoder(drop="first", handle_unknown="ignore"), ["meal_type"]),
+])
+
+final_pl = make_pipeline(preproc_gs, LogisticRegression(max_iter=1000))
+
+params = {
+    "columntransformer__text__max_features": [3000, 5000],
+    "columntransformer__text__ngram_range": [(1, 1), (1, 2)],
+    "logisticregression__C": [0.1, 0.5, 1.0],
 }
 
-gs = GridSearchCV(final_pl, param_grid=params, cv=5, scoring='f1', n_jobs=-1)
+gs = GridSearchCV(final_pl, param_grid=params, cv=5, scoring="f1", n_jobs=-1)
 gs.fit(X_train, y_train)
-</code></pre>
-        <p>Best hyperparameters: <strong>C=0.5, max_features=5000, ngram_range=(1,2)</strong>.</p>
 
-            <h3>Performance Comparison</h3>
-            <table>
-                <thead><tr><th>Metric</th><th>Baseline</th><th>Final Model</th></tr></thead>
-                <tbody>
-                    <tr><td>F1-Score</td><td>0.6630</td><td><strong>0.9122</strong></td></tr>
-                    <tr><td>Accuracy</td><td>0.5503</td><td><strong>0.8578</strong></td></tr>
-                    <tr><td>Precision (5-star)</td><td>0.79</td><td><strong>0.87</strong></td></tr>
-                    <tr><td>Recall (5-star)</td><td>0.57</td><td><strong>0.95</strong></td></tr>
-                </tbody>
-            </table>
-            <p>
-                The final model catches 95% of true 5-star reviews with 87% precision. Comparing the results to the baseline model, it shows us how important TF-IDF text features are for improving model performance.
-            </p>
-                <img src="image/confusion_matrix_2.png"
-                 alt="Confusion Matrix of Fully Optimized Logistic Regression Model"
-                 class="section-image">
-        </section>
+print("Best params:", gs.best_params_)
+print(f"Best CV F1: {gs.best_score_:.4f}")
 
-        <section id="fairness" class="section">
-            <h2>Fairness Analysis</h2>
+final_pred = gs.predict(X_test)
+print(classification_report(y_test, final_pred))
+print(f"F1: {f1_score(y_test, final_pred):.4f}")</code></pre>
 
-            <p>
-                We investigated whether our model performs equally well for <strong>simple recipes</strong> vs <strong>complex recipes</strong>.
-            </p>
+<img src="image/final_confusion.png"
+     alt="Confusion matrix of optimized logistic regression model"
+     class="section-image">
 
-            <h3>Setup</h3>
-            <ul>
-                <li><strong>Group X</strong>: Simple recipes: n_ingredients &le; median</li>
-                <li><strong>Group Y</strong>: Complex recipes: n_ingredients &gt; median</li>
-                <li><strong>Metrics</strong>: Precision</li>
-                <li><strong>Null Hypothesis</strong>: Precision is the same for both groups.</li>
-                <li><strong>Alternative Hypothesis</strong>: Precision differs between groups.</li>
-                <li><strong>Significance level</strong>: &alpha; = 0.05</li>
-            </ul>
+<pre><code>ConfusionMatrixDisplay.from_estimator(gs, X_test, y_test, cmap="Blues")
+plt.title("Final Model Confusion Matrix")
+plt.grid(False)
+plt.show()</code></pre>
 
-<pre><code>
-med_ingredients = X_test['n_ingredients'].median()
-is_complex = (X_test['n_ingredients'] > med_ingredients).values
+<img src="image/final_confusion_matrix_1.png"
+     alt="Visual confusion matrix for optimized logistic regression model"
+     class="section-image">
 
+<h3>Performance Improvement Over Baseline</h3>
+<p>
+    Finally, we compared the optimized model against the baseline model using both F1-score and accuracy.
+</p>
+
+<pre><code>print(f"Baseline F1:  {f1_score(y_test, baseline_pred):.4f}")
+print(f"Final F1:     {f1_score(y_test, final_pred):.4f}")
+print(f"Baseline Acc: {accuracy_score(y_test, baseline_pred):.4f}")
+print(f"Final Acc:    {accuracy_score(y_test, final_pred):.4f}")</code></pre>
+
+<img src="image/final.png"
+     alt="Comparison of baseline and optimized model performance"
+     class="section-image">
+
+<p>
+    The optimized model outperformed the baseline model on both F1-score and accuracy, showing that the engineered features, 
+    text representations, and tuning process meaningfully improved predictive performance.
+</p>
+
+
+ <section id="fairness" class="section">
+    <h2>Fairness Evaluation</h2>
+
+<section id="fairness" class="section">
+    <h2>Fairness Evaluation</h2>
+
+    <h3>Performing Fairness Analysis</h3>
+    <p>
+        In this section, we evaluate whether our final model performs differently across groups defined by recipe complexity. 
+        Specifically, we compare model precision for recipes with fewer ingredients versus recipes with more ingredients, 
+        and then use a permutation test to determine whether the observed difference in precision is statistically significant.
+    </p>
+
+    <h3>Fairness Test Setup</h3>
+    <p>
+        To assess fairness, we split recipes into two groups based on the median number of ingredients:
+    </p>
+
+    <ul>
+        <li><strong>Simple recipes:</strong> <code>n_ingredients</code> less than or equal to the median</li>
+        <li><strong>Complex recipes:</strong> <code>n_ingredients</code> greater than the median</li>
+    </ul>
+
+    <p>
+        We used <strong>precision</strong> as the fairness metric.
+    </p>
+
+    <p><strong>Null Hypothesis (H₀):</strong> Model precision is the same for both groups.</p>
+    <p><strong>Alternative Hypothesis (H₁):</strong> Model precision differs between the two groups.</p>
+    <p><strong>Significance Level:</strong> α = 0.05</p>
+
+    <h3>Computing the Observed Difference</h3>
+    <pre><code>med_ingredients = X_test["n_ingredients"].median()
+is_complex = (X_test["n_ingredients"] > med_ingredients).values
+
+# Compute precision for each group
 prec_simple = precision_score(y_test[~is_complex], final_pred[~is_complex])
 prec_complex = precision_score(y_test[is_complex], final_pred[is_complex])
 observed_diff = abs(prec_simple - prec_complex)
 
-n_reps = 1000
+print(f"Precision (simple): {prec_simple:.4f}")
+print(f"Precision (complex): {prec_complex:.4f}")
+print(f"Observed difference: {observed_diff:.4f}")</code></pre>
+
+    <p>
+        Precision (simple): 0.8746<br>
+        Precision (complex): 0.8716<br>
+        Observed difference: 0.0030
+    </p>
+
+    <h3>Permutation Test</h3>
+    <p>
+        We then performed a permutation test by repeatedly shuffling the group labels and recomputing the difference in precision. 
+        This simulates the null hypothesis that model precision does not depend on recipe complexity.
+    </p>
+
+    <pre><code>n_reps = 1000
 perm_diffs = []
+
 for _ in range(n_reps):
     shuffled = np.random.permutation(is_complex)
     p_s = precision_score(y_test[~shuffled], final_pred[~shuffled])
     p_c = precision_score(y_test[shuffled], final_pred[shuffled])
     perm_diffs.append(abs(p_s - p_c))
 
-p_value = np.mean(np.array(perm_diffs) >= observed_diff)     
-</code></pre>
+p_value = np.mean(np.array(perm_diffs) >= observed_diff)
+print(f"p-value: {p_value:.3f}")</code></pre>
 
-            <h3>Results</h3>
-            <p>We got a precision of 0.8774 for simple recipes and 0.8710 for complex recipes, which is only a 0.0034 difference. After running the permutation test, we got a <strong>p-value of 0.348</strong>, which is well above 0.05. So we fail to reject the null hypothesis, meaning our model seems to perform about the same for both groups.</p>
-        </section>
+    <p>p-value: 0.405</p>
 
+    <img src="image/fairness.png"
+         alt="Permutation test for fairness between simple and complex recipes"
+         class="section-image">
 
-        <section id="conclusion" class="section">
-            <h2>Conclusion</h2>
-            <p>
-                Our hypothesis test showed that cooking time has almost no real effect on ratings, which told us early on that basic recipe metadata wouldn't be enough to predict 5-star reviews. The baseline model confirmed this, with just numeric features and meal type, we only got an F1 of 0.6630.  
-            </p>
-            <p>
-                Once we added review text through TF-IDF and engineered features like sentiment, exclamation count, and our modifier flag from EDA, the final model jumped to an F1 of 0.9122. The biggest takeaway is that what people write matters way more than the recipe itself when it comes to predicting whether they gave 5 stars.
-            </p>
-            <p>
-                Our fairness analysis also showed that the model performs about the same for both simple and complex recipes, which means this model is not biased towards one type of recipe, and can equally predict if a recipe will receive 5 stars regardless of its complexity.
-            </p>
-        </section>
+    <h3>Results</h3>
+    <p>
+        The fairness analysis produced a p-value of 0.405, which is greater than the significance level of 0.05. 
+        Therefore, we fail to reject the null hypothesis that the model has the same precision across the two ingredient-count groups.
+    </p>
+
+    <p>
+        This suggests that there is not strong evidence of a meaningful difference in model precision between simpler recipes 
+        and more complex recipes. In other words, the model’s performance appears reasonably consistent across these two groups.
+    </p>
+</section>
+
+<section id="conclusion" class="section">
+    <h2>Conclusion</h2>
+<p>
+        Overall, this project shows that recipe metadata and review text can be used to predict whether a user will leave a five-star review. 
+        After cleaning and exploring the Foods.com recipes and interactions data, we found that review text, recipe structure, and engineered features 
+        such as sentiment, exclamation count, word count, and steps per ingredient provided useful information for distinguishing five-star reviews 
+        from lower-rated reviews.
+    </p>
+
+    <p>
+        Our baseline Logistic Regression model provided a useful starting point, achieving an F1-score of 0.6630. 
+        After expanding the feature set, incorporating TF-IDF representations of review text, comparing multiple classifiers, 
+        and tuning hyperparameters with GridSearchCV, our final Logistic Regression model performed substantially better, 
+        achieving a cross-validated F1-score above 0.91 and improving over the baseline on both F1-score and accuracy. 
+        This suggests that combining structured recipe features with text-based review features leads to much stronger predictive performance.
+    </p>
+
+    <p>
+        In addition to modeling, our statistical analysis provided useful context for understanding the data. 
+        We found that missingness in the <code>description</code> column was associated with the number of ingredients but not clearly with the number of steps, 
+        suggesting that some missingness in the dataset is more consistent with MAR than MCAR. We also found that quick recipes and longer recipes differ 
+        slightly in average rating, although the observed difference was very small in practical terms.
+    </p>
+
+    <p>
+        Finally, our fairness analysis showed no strong evidence that the final model performs differently across simpler and more complex recipes when evaluated by precision. 
+        The observed precision gap between the two ingredient-count groups was small, and the permutation test produced a p-value of 0.405, 
+        so we failed to reject the null hypothesis of equal precision. This suggests that the model’s predictive performance is reasonably consistent across these two groups.
+    </p>
+
+    <p>
+        Taken together, these results show that machine learning can be used to meaningfully predict five-star recipe reviews, especially when review text and engineered features 
+        are incorporated into the modeling pipeline. More broadly, this project highlights the value of combining data cleaning, exploratory analysis, missingness assessment, 
+        statistical testing, predictive modeling, and fairness evaluation to build a more complete and trustworthy data science workflow.
+    </p>
+</section>
 
     </main>
 </body>
