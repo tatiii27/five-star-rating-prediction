@@ -336,7 +336,10 @@ food_group_steps
 
             <h3>Permutation Test 1</h3>
             <p>
-                We tested whether descrpition missingness was associated with <code>Number of Steps</code>.
+               <h3>Missingness Dependency Tests</h3>
+            <p>
+                We tested whether the missingness of the <code>description</code> column depends on other columns. If the permutation test rejects, it suggests the missingness is <strong>MAR</strong> (depends on other observed columns). If it fails to reject, the missingness is consistent with <strong>MCAR</strong> (doesn't depend on other columns).
+            </p>
                 
                 <p><strong>Null Hypothesis:</strong> The missingness in the <code>description</code> column is independent of the number of steps.</p>
                 <p><strong>Alternative Hypothesis:</strong> The missingness in the <code>description</code> column depends on the number of steps.</p>
