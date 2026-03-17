@@ -350,6 +350,14 @@ alt="Chart to Display Missingess in Permutation Test"
     model_df = merged.dropna(subset=['rating', 'review']).copy()
     model_df['is_five_star'] = (model_df['rating'] == 5).astype(int)
 </code></pre>
+            <h3>Response Variable</h3>
+            <p>We're predicting <code>is_five_star</code>, which is 1 if the rating is exactly 5 and 0 otherwise. We chose this because 5 stars represents the strongest level of satisfaction, and it gives us a cleaner question than trying to predict the exact 1-5 rating.</p>
+
+            <h3>Evaluation Metric</h3>
+            <p>We use <strong>F1-score</strong> instead of accuracy because about 77% of reviews are 5 stars. A model that just predicts 5 stars every time would get 77% accuracy without learning anything useful. F1 balances precision and recall, so it actually measures whether the model is doing something meaningful.</p>
+
+            <h3>Features at Time of Prediction</h3>
+            <p>We assume the review text has already been written and we want to infer the star rating. This makes sense for cases where a platform receives text reviews without structured ratings. We do not use the numeric rating as a feature since that is what we are trying to predict.</p>
         </section>
 
         <section id="baseline-model" class="section">
