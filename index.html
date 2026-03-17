@@ -234,7 +234,7 @@ merged['meal_type'] = merged['tags'].apply(get_meal_type)</code></pre>
         <section id="missingness" class="section">
             <h2>Assessment of Missingness</h2>
 
-            <h3>NMR Analysis</h3>
+            <h3>NMAR Analysis</h3>
             <p>
                 We believe the <code>rating</code> column is <strong>NMAR</strong> (Not Missing At Random). The missingness is likely tied to the rating value itself, where users who felt indifferent are less likely to leave a rating, while users with strong opinions are more motivated to rate.
             </p>
@@ -313,6 +313,7 @@ merged['meal_type'] = merged['tags'].apply(get_meal_type)</code></pre>
             <h3>Null Hypothesis</h3>
             <p>
                 The average rating of quick recipes and longer recipes are the same.
+            </p>
 
             <h3>Alternative Hypothesis</h3>
             <p>
@@ -346,7 +347,7 @@ merged['meal_type'] = merged['tags'].apply(get_meal_type)</code></pre>
 
             <h3>Results</h3>
             <p>
-               Quick recipes had an average rating of 4.6985 and longer recipes had 4.6638, so the observed difference was only about 0.035. We got a p-value of 0.0, so we reject the null hypothesis. Cooking time and ratings are not independant.
+               Quick recipes had an average rating of 4.6985 and longer recipes had 4.6638, so the observed difference was only about 0.035. We got a p-value of 0.0, so we reject the null hypothesis. Cooking time and ratings are not independent.
             </p>
         </section>
 
@@ -376,7 +377,7 @@ merged['meal_type'] = merged['tags'].apply(get_meal_type)</code></pre>
             <p>Our baseline uses <strong>5 quantitative features</strong> (<code>n_steps</code>, <code>n_ingredients</code>, <code>minutes</code>, <code>calories</code>, <code>review_length</code>) and <strong>1 nominal feature</strong> (<code>meal_type</code>). No ordinal features.</p>
 <pre><code>
     baseline_num = ['n_steps', 'n_ingredients', 'minutes', 'calories', 'review_length']
-baseline_cat = ['meal_type']</code></pre>
+    baseline_cat = ['meal_type']</code></pre>
 
             <h3>Pipeline</h3>
             <p>Quantitative features are standardized with <code>StandardScaler</code>. The nominal feature is one-hot encoded with <code>OneHotEncoder(drop='first')</code>. All in a single sklearn Pipeline.</p>
@@ -400,11 +401,6 @@ baseline_pl.fit(X_train, y_train)
                 The baseline achieved an <strong>F1-score of 0.6630</strong> and accuracy of 0.5503. Precision was 0.79 but recall only 0.57, which means the model misses 43% of true 5-star reviews. Which is why we needed to add more features, to improve these metrics.
             </p>
 
-            <p>
-                The baseline classifier achieved an accuracy of 53.4% and an ROC-AUC score of 0.52, indicating that the model performs only slightly better than random guessing. While the model demonstrates moderate precision (0.74) when predicting five-star reviews, recall is relatively low (0.56), meaning that a substantial portion of actual five-star reviews are misclassified. 
-                However, its performance suggested that additional information such as review text, tags, and ingredients may improve prediction. The biggest problems with this classifier was that it displayed moderate precision, has poor recall, has weak discriminative ability and has similar performance to randomly guessing the target variable.
-            </p>
-
     <img src="image/confusion_matrix.png"
     alt="Confusion Matrix of Base Logistic Regression Model"
     class="section-image">
@@ -424,22 +420,6 @@ baseline_pl.fit(X_train, y_train)
             </ul>
 
 
- <pre><code>
-def to_numeric_array(df):
-    return df.apply(pd.to_numeric, errors="coerce").fillna(0).to_numpy(dtype=np.float64)
-
-def lop1p_array(arr):
-    arr = np.asarray(arr, dtype=np.float64)
-    arr = np.clip(arr, 0, None)
-    return np.log1p(arr)
-
-numeric_pipe = Pipeline(steps=[
-    ("to_num", FunctionTransformer(to_numeric_array, validate=False)),
-    ("lop1p", FunctionTransformer(lop1p_array, validate=True)),
-    ("scale", MaxAbsScaler()),
-])
-</code></pre>
-
 
 <pre><code>
     model_df['exclamation_count'] = model_df['review'].str.count('!')
@@ -455,6 +435,7 @@ numeric_pipe = Pipeline(steps=[
     model_df['sentiment'] = (
         model_df['review'].apply(lambda x: count_words(x, positive_words))
         - model_df['review'].apply(lambda x: count_words(x, negative_words))
+    )
 
 </code></pre>
                 
@@ -504,16 +485,16 @@ gs.fit(X_train, y_train)
 
             <h3>Performance Comparison</h3>
             <table>
-                <thread><tr><th>Metric</th><th>Baseline</th><th>Final Model</th></tr></thread>
+                <thead><tr><th>Metric</th><th>Baseline</th><th>Final Model</th></tr></thread>
                 <tbody>
                     <tr><td>F1-Score</td><td>0.6630</td><td><strong>0.9122</strong></td></tr>
                     <tr><td>Accuracy</td><td>0.5503</td><td><strong>0.8578</strong></td></tr>
                     <tr><td>Precision (5-star)</td><td>0.79</td><td><strong>0.87</strong></td></tr>
-                    <tr><td>Reacall (5-star)</td><td>0.57</td><td><strong>0.95</strong></td></tr>
+                    <tr><td>Recall (5-star)</td><td>0.57</td><td><strong>0.95</strong></td></tr>
                 </tbody>
             </table>
             <p>
-                The final model catches 95% of true 5-star reviews with 87% precision. Comparing the resultsd to the baseline model, it tells us how important TF-IDF text features for improving model performance.
+                The final model catches 95% of true 5-star reviews with 87% precision. Comparing the results to the baseline model, it tells us how important TF-IDF text features for improving model performance.
             </p>
                 <img src="image/confusion_matrix_2.png"
                  alt="Confusion Matrix of Fully Optimized Logistic Regression Model"
@@ -529,7 +510,7 @@ gs.fit(X_train, y_train)
 
             <h3>Setup</h3>
             <ul>
-                <li><strong>Group X</strong>: Simple recipes: n_ingredients $le; median</li>
+                <li><strong>Group X</strong>: Simple recipes: n_ingredients &le; median</li>
                 <li><strong>Group Y</strong>: Complex recipes: n_ingredients &gt; median</li>
                 <li><strong>Metrics</strong>: Precision</li>
                 <li><strong>Null Hypothesis</strong>: Precision is the same for both groups.</li>
