@@ -151,7 +151,7 @@ merged["submitted"] = pd.to_datetime(merged["submitted"])</code></pre>
            <h3>6. Creating Review Length</h3>
 
                 <p>The column review length was created to define how many characters were utilized by a user to sumbmit a review, has potential usage in EDA and machine learning</p>
-                
+
                 <pre><code>
 merged['review_length'] = merged['review'].str.len()
                 </code></pre>
@@ -321,7 +321,7 @@ food_group_steps
 )</code></pre>
 
             <img src="image/number_of_steps.png"
-                 alt="average number of steps by meal type"
+                 alt="Average Number of Steps By Meal Type"
                  class="section-image">
         </section>
 
@@ -336,11 +336,12 @@ food_group_steps
 
             <h3>Permutation Test 1</h3>
             <p>
+                We tested whether descrpition missingness was associated with <code>Number of Steps</code>.
                <h3>Missingness Dependency Tests</h3>
             <p>
                 We tested whether the missingness of the <code>description</code> column depends on other columns. If the permutation test rejects, it suggests the missingness is <strong>MAR</strong> (depends on other observed columns). If it fails to reject, the missingness is consistent with <strong>MCAR</strong> (doesn't depend on other columns).
             </p>
-                
+
                 <p><strong>Null Hypothesis:</strong> The missingness in the <code>description</code> column is independent of the number of steps.</p>
                 <p><strong>Alternative Hypothesis:</strong> The missingness in the <code>description</code> column depends on the number of steps.</p>
 
@@ -597,7 +598,7 @@ class="section-image">
                 The response variable for our classification task is the is_five_star column that was created as part of the EDA process.
             </p>
 
- 
+
 
             <h3>Features Used</h3>
             <p>
@@ -865,9 +866,6 @@ print(f"Final Acc:    {accuracy_score(y_test, final_pred):.4f}")</code></pre>
 </p>
 
 
- <section id="fairness" class="section">
-    <h2>Fairness Evaluation</h2>
-
 <section id="fairness" class="section">
     <h2>Fairness Evaluation</h2>
 
@@ -990,4 +988,5 @@ print(f"p-value: {p_value:.3f}")</code></pre>
 
     </main>
 </body>
+</html>
 </html>
