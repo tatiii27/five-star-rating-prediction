@@ -159,6 +159,11 @@ merged['meal_type'] = merged['tags'].apply(get_meal_type)</code></pre>
 <pre><code>
     merged['review_length'] = merged['review'].str.len()
 </code></pre>
+            
+            <h3>Cleaned Dataset</h3>
+            <p>After all cleaning steps, here is what the first few rows of our dataset look like:</p>
+            
+            <!-- screenshot of merged.head() -->
 
         </section>
 
@@ -322,7 +327,7 @@ merged['meal_type'] = merged['tags'].apply(get_meal_type)</code></pre>
 
             <h3>Test Setup</h3>
             <p>
-                We used the <strong>absolute difference in mean rating</strong> as our test statistic with <strong>&alpha; = 0.05</strong>. We performed a permutation test by shuffling labels 1000 times.
+                We used the <strong>absolute difference in mean rating</strong> as our test statistic because we care about whether the two groups differ at all, not which direction. We set <strong>&alpha; = 0.05</strong> and performed a permutation test by shuffling the quick/longer labels 1000 times.
             </p>
 <pre><code>
     rated = merged.dropna(subset=['rating']).copy()
@@ -347,7 +352,7 @@ merged['meal_type'] = merged['tags'].apply(get_meal_type)</code></pre>
 
             <h3>Results</h3>
             <p>
-               Quick recipes had an average rating of 4.6985 and longer recipes had 4.6638, so the observed difference was only about 0.035. We got a p-value of 0.0, so we reject the null hypothesis. Cooking time and ratings are not independent.
+               Quick recipes had an average rating of 4.6985 and longer recipes had 4.6638, so the observed difference was only about 0.035. At a significance level of 0.05, we got a p-value of 0.0, so we reject the null hypothesis. Cooking time and ratings are not independent.
             </p>
         </section>
 
@@ -398,7 +403,7 @@ baseline_pl.fit(X_train, y_train)
 
             <h3>Evaluation</h3>
             <p>
-                The baseline achieved an <strong>F1-score of 0.6630</strong> and accuracy of 0.5503. Precision was 0.79 but recall only 0.57, which means the model misses 43% of true 5-star reviews. Which is why we needed to add more features, to improve these metrics.
+                We evaluated the model on a held-out test set using an 80/20 stratified split. The baseline achieved an <strong>F1-score of 0.6630</strong> and accuracy of 0.5503. Precision was 0.79 but recall only 0.57, which means the model misses 43% of true 5-star reviews. We don't consider this a good model, which is why we needed to add more features to improve performance.
             </p>
 
     <img src="image/confusion_matrix.png"
@@ -412,11 +417,11 @@ baseline_pl.fit(X_train, y_train)
             <h3>Engineered Features</h3>
             <p>We added 5 new features, each justified by the data generating process:</p>
             <ul>
-                <li><strong>exclamation_count</strong>: Number of "!" (captures enthusiasm).</li>
-                <li><strong>word_count</strong>: Number of words  (shows different writing styles).</li>
-                <li><strong>sentiment</strong>: Positive words minus negative words, built from word frequency analysis.</li>
-                <li><strong>is_modifier</strong>: Whether the reviewer modified the recipe (from our EDA).</li>
-                <li><strong>steps_per_ingredient</strong>: Complexity ratio of steps to ingredients.</li>
+                <li><strong>exclamation_count</strong>: Number of "!" in the review. People who love a recipe tend to express excitement with punctuation like "SO GOOD!!!", so this captures enthusiasm that plain word counts miss.</li>
+                <li><strong>word_count</strong>: Number of words in the review. Our EDA showed that lower-rated reviews tend to be longer because unhappy users explain what went wrong, so review length is a signal of satisfaction.</li>
+                <li><strong>sentiment</strong>: Count of positive words minus negative words. We built this from our word frequency analysis that showed words like "loved" and "amazing" are heavily overrepresented in 5-star reviews while words like "bland" and "disappointed" appear more in lower-rated ones.</li>
+                <li><strong>is_modifier</strong>: Whether the reviewer mentioned changing the recipe. We discovered this pattern in our EDA — about 26% of reviews mention modifications, and these reviewers interact with recipes differently.</li>
+                <li><strong>steps_per_ingredient</strong>: Ratio of steps to ingredients. A recipe with 10 steps and 3 ingredients is much more technique-heavy than one with 10 steps and 20 ingredients, and this complexity may affect how people rate it.</li>
             </ul>
 
 
