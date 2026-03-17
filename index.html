@@ -58,6 +58,7 @@
             <p>
                 Our project uses two datasets: a recipes dataset and an interactions dataset from Foods.com, which contains user reviews and ratings data from 2008 to 2018.
                 These datasets were merged together using a left join on the recipe identifier.
+                Our project uses two datasets from Foods.com: a recipes dataset (83,782 rows) and an interactions dataset (731,927 rows) containing user reviews and ratings from 2008 to 2018.
             </p>
 
             <h3>Relevant Columns</h3>
@@ -221,6 +222,32 @@ merged["meal_type"].value_counts()</code></pre>
 merged["30 Minutes or Less"] = np.where(merged["minutes"] &lt;= 30, True, False).astype(bool)
 merged["15 Minutes or Less"] = np.where(merged["minutes"] &lt;= 15, True, False).astype(bool)</code></pre>
 
+11. Remove Redudnant Columns
+<p>
+   We removed the columns contributor_id, user_id, recipe_id, steps
+</p>
+
+<pre><code>
+    merged = merged.drop(
+    columns=['contributor_id', 'user_id', 'recipe_id', 'steps'],
+    errors='ignore'
+)
+</code></pre>
+
+12. Return Clean Data
+<p>
+   Run the following code to return the cleaned data
+</p>
+
+<pre><code>
+print('cleaned:', merged.shape)
+merged.head()
+
+</code></pre>
+<img src="image/cleaned_data.png"
+     alt="Count of meal types"
+     class="section-image">
+
         </section>
 
         <section id="eda" class="section">
@@ -327,16 +354,16 @@ food_group_steps
 
         <section id="missingness" class="section">
             <h2>Assessment of Missingness</h2>
-            
+
             <h3>NMAR Analysis</h3>
             <p>
-                We believe the <code>rating</code> column is <strong>NMAR</strong> (Not Missing At Random). The missingness is likely tied to the rating value itself — users who felt indifferent are less likely to leave a rating, while users with strong opinions are more motivated to rate.
+                We believe the <code>description</code> column is <strong>NMAR</strong> (Not Missing At Random). The missingness is likely tied to the value in the number of steps and number of ingredients columns — users might fails to provide a description for recipe dpeending on the ingreidents and steps in the recipe.
             </p>
             <p>
                 To make this <strong>MAR</strong>, we would need additional data on user engagement — for example, time spent on the recipe page or the user's rating history.
             </p>
-            
-            <h3>Rating Missingness</h3>
+
+            <h3>Description Missingness</h3>
             <p>
                We investigated whether the missingness in the description column is related to the number of ingreidents and number of steps columns. If the missingness depends on the observed variables, then the missingness mechanism would be consistent with Missing At Random (MAR) rather than Missing Completely At Random (MCAR).
             </p>
