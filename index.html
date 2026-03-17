@@ -327,7 +327,15 @@ food_group_steps
 
         <section id="missingness" class="section">
             <h2>Assessment of Missingness</h2>
-
+            
+            <h3>NMAR Analysis</h3>
+            <p>
+                We believe the <code>rating</code> column is <strong>NMAR</strong> (Not Missing At Random). The missingness is likely tied to the rating value itself — users who felt indifferent are less likely to leave a rating, while users with strong opinions are more motivated to rate.
+            </p>
+            <p>
+                To make this <strong>MAR</strong>, we would need additional data on user engagement — for example, time spent on the recipe page or the user's rating history.
+            </p>
+            
             <h3>Rating Missingness</h3>
             <p>
                We investigated whether the missingness in the description column is related to the number of ingreidents and number of steps columns. If the missingness depends on the observed variables, then the missingness mechanism would be consistent with Missing At Random (MAR) rather than Missing Completely At Random (MCAR).
